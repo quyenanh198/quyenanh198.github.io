@@ -108,7 +108,7 @@ html, body {
 }
 
 .header {
-    background: #3498db;
+    background: #FAFAFA;
     padding: 30px;
     color: #FFF;
     font-weight: bold;
@@ -128,7 +128,7 @@ html, body {
 
 .footer {
     text-align: center;
-    background: #3498db;
+    background: #FAFAFA;
     padding: 30px;
 }
 

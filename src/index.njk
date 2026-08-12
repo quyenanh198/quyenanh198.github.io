@@ -2,23 +2,42 @@
 layout: base.njk
 title: Home
 ---
-<section>
+<section class="hero">
+  <span class="eyebrow">{{ site.eyebrow }}</span>
   <h1>Hi, I'm {{ site.author }}.</h1>
-  <p class="lede">{{ site.description }}</p>
+  <p class="lede">{{ site.tagline }}</p>
+  <div class="hero-links">
+    <a class="pill" href="mailto:{{ site.email }}">Email</a>
+    {% for item in site.social %}
+    <a class="pill" href="{{ item.url }}">{{ item.text }}</a>
+    {% endfor %}
+  </div>
 </section>
 
 <section>
-  <h2>Latest posts</h2>
+  <div class="section-head">
+    <h2>Latest posts</h2>
+    <a href="/blog/">All posts →</a>
+  </div>
   <ul class="post-list">
     {% for post in collections.posts %}
       {% if loop.index <= 3 %}
       <li>
-        <time datetime="{{ post.date | htmlDateString }}">{{ post.date | readableDate }}</time>
-        <a href="{{ post.url }}">{{ post.data.title }}</a>
-        {% if post.data.excerpt %}<p>{{ post.data.excerpt }}</p>{% endif %}
+        <a class="post-card" href="{{ post.url }}">
+          <div class="post-card-top">
+            <time datetime="{{ post.date | htmlDateString }}">{{ post.date | readableDate }}</time>
+            <span class="post-card-arrow">Read →</span>
+          </div>
+          <h3>{{ post.data.title }}</h3>
+          {% if post.data.excerpt %}<p>{{ post.data.excerpt }}</p>{% endif %}
+          {% if post.data.tags %}
+          <ul class="tags">
+            {% for tag in post.data.tags %}<li class="tag">{{ tag }}</li>{% endfor %}
+          </ul>
+          {% endif %}
+        </a>
       </li>
       {% endif %}
     {% endfor %}
   </ul>
-  <p><a href="/blog/">All posts →</a></p>
 </section>

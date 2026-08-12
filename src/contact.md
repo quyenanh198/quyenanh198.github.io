@@ -3,11 +3,15 @@ layout: base.njk
 title: Contact
 permalink: /contact/
 ---
-# Contact
+<div class="page-header">
+<span class="eyebrow">Contact</span>
+</div>
+
+# Get in touch
 
 <ul class="social-links">
-  <li>Email: <a href="mailto:{{ site.email }}">{{ site.email }}</a></li>
+  <li><span class="label">Email</span> <a href="mailto:{{ site.email }}">{{ site.email }}</a></li>
   {% for item in site.social %}
-  <li>{{ item.text }}: <a href="{{ item.url }}">{{ item.url }}</a></li>
+  <li><span class="label">{{ item.text }}</span> <a href="{{ item.url }}">{{ item.url }}</a></li>
   {% endfor %}
 </ul>

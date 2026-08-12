@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if title %}{{ title }} · {% endif %}{{ site.title }}</title>
+  <meta name="description" content="{{ description or site.description }}">
+  <link rel="stylesheet" href="/css/style.css">
+  <script>
+    (function () {
+      var stored = localStorage.getItem("theme");
+      var theme = stored || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+</head>
+<body>
+  <header class="site-header">
+    <nav class="site-nav">
+      <a class="site-brand" href="/">{{ site.title }}</a>
+      <div class="site-nav-links">
+        {% for item in site.nav %}
+        <a href="{{ item.url }}"{% if page.url == item.url %} aria-current="page"{% endif %}>{{ item.text }}</a>
+        {% endfor %}
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle color theme">◐</button>
+      </div>
+    </nav>
+  </header>
+
+  <main class="site-main">
+    {{ content | safe }}
+  </main>
+
+  <footer class="site-footer">
+    <p>&copy; {{ currentYear }} {{ site.author }}. Built with Eleventy, hosted on GitHub Pages.</p>
+    <p class="site-footer-social">
+      {% for item in site.social %}
+      <a href="{{ item.url }}">{{ item.text }}</a>
+      {% endfor %}
+      <a href="mailto:{{ site.email }}">Email</a>
+    </p>
+  </footer>
+
+  <script src="/js/theme.js"></script>
+</body>
+</html>

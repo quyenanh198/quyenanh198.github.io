@@ -1,0 +1,24 @@
+---
+layout: base.njk
+title: Home
+---
+<section>
+  <h1>Hi, I'm {{ site.author }}.</h1>
+  <p class="lede">{{ site.description }}</p>
+</section>
+
+<section>
+  <h2>Latest posts</h2>
+  <ul class="post-list">
+    {% for post in collections.posts %}
+      {% if loop.index <= 3 %}
+      <li>
+        <time datetime="{{ post.date | htmlDateString }}">{{ post.date | readableDate }}</time>
+        <a href="{{ post.url }}">{{ post.data.title }}</a>
+        {% if post.data.excerpt %}<p>{{ post.data.excerpt }}</p>{% endif %}
+      </li>
+      {% endif %}
+    {% endfor %}
+  </ul>
+  <p><a href="/blog/">All posts →</a></p>
+</section>

@@ -1,0 +1,14 @@
+{
+  "name": "quyenanh198.github.io",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal site and blog",
+  "scripts": {
+    "build": "eleventy",
+    "serve": "eleventy --serve",
+    "debug": "DEBUG=Eleventy* eleventy"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "^2.0.1"
+  }
+}

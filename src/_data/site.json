@@ -1,0 +1,16 @@
+{
+  "title": "Quyen Anh",
+  "description": "Personal site and blog of Quyen Anh.",
+  "url": "https://quyenanh198.github.io",
+  "author": "Quyen Anh",
+  "email": "quyenanh198@gmail.com",
+  "nav": [
+    { "text": "Home", "url": "/" },
+    { "text": "Blog", "url": "/blog/" },
+    { "text": "About", "url": "/about/" },
+    { "text": "Contact", "url": "/contact/" }
+  ],
+  "social": [
+    { "text": "GitHub", "url": "https://github.com/quyenanh198" }
+  ]
+}

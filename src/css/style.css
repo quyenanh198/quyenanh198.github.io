@@ -6,6 +6,8 @@
   --border: #e6e6e2;
   --accent: #a2472f;
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --gain: #1a7f4b;
+  --loss: #c0392b;
   --font-prose: "Lora", "Noto Serif", Georgia, "Times New Roman", serif;
   --max-width: 700px;
 }
@@ -22,6 +24,8 @@
     --fg-muted: #9a9aa2;
     --border: #2b2b34;
     --accent: #e08a68;
+    --gain: #4ecb8d;
+    --loss: #ef7b6d;
   }
 }
 
@@ -33,6 +37,8 @@
   --fg-muted: #9a9aa2;
   --border: #2b2b34;
   --accent: #e08a68;
+  --gain: #4ecb8d;
+  --loss: #ef7b6d;
 }
 
 * {
@@ -308,6 +314,131 @@ h3 { font-size: 1.15em; margin: 1.4em 0 0.5em; }
   color: var(--fg-muted);
   font-size: 0.8em;
 }
+
+.lookup-form {
+  display: flex;
+  gap: 10px;
+  margin: 24px 0 12px;
+}
+
+.lookup-form input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.lookup-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.lookup-form button {
+  font: inherit;
+  font-weight: 600;
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+
+.lookup-form button:hover {
+  opacity: 0.88;
+}
+
+button.lookup-chip {
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+button.lookup-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.lookup-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 22px;
+  margin: 20px 0;
+  background: var(--bg-subtle);
+}
+
+.lookup-head {
+  margin-bottom: 6px;
+}
+
+.lookup-symbol {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 700;
+  font-size: 1.2em;
+}
+
+.lookup-name {
+  color: var(--fg-muted);
+}
+
+.lookup-price {
+  font-size: 1.5em;
+  margin: 4px 0 10px;
+}
+
+.lookup-price .lookup-date {
+  font-size: 0.55em;
+  color: var(--fg-muted);
+}
+
+.gain { color: var(--gain); }
+.loss { color: var(--loss); }
+.flat { color: var(--fg-muted); }
+
+.spark {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin: 6px 0 12px;
+}
+
+.lookup-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.92em;
+}
+
+.lookup-table th, .lookup-table td {
+  text-align: left;
+  padding: 6px 10px 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-weight: normal;
+}
+
+.lookup-table th {
+  color: var(--fg-muted);
+  width: 48%;
+}
+
+.lookup-trend {
+  margin: 12px 0 4px;
+}
+
+.lookup-source {
+  color: var(--fg-muted);
+  font-size: 0.8em;
+  margin: 8px 0 0;
+}
+
+.lookup-error p { margin: 0; }
 
 .social-links {
   list-style: none;

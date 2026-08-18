@@ -1,0 +1,24 @@
+---
+layout: base.njk
+title: Tra cứu ticker
+permalink: /lookup/
+---
+<h1>Tra cứu ticker</h1>
+<p class="lede">Nhập mã cổ phiếu/ETF Mỹ (ví dụ AAPL, NVDA, SPY) để xem ngay giá, xu hướng, chỉ báo kỹ thuật và các mốc giá đáng chú ý.</p>
+
+<form id="lookup-form" class="lookup-form" autocomplete="off">
+  <input id="lookup-input" type="text" inputmode="latin" spellcheck="false"
+         placeholder="Nhập mã, ví dụ: AAPL" aria-label="Mã ticker" maxlength="12" required>
+  <button type="submit">Tra cứu</button>
+</form>
+
+<p class="watchlist-row lookup-chips" aria-label="Tra cứu nhanh">
+  {% for t in watchlist.benchmarks %}<button type="button" class="ticker-tag lookup-chip" data-symbol="{{ t.symbol }}" title="{{ t.name }}">{{ t.symbol }}</button>{% endfor %}
+  {% for t in watchlist.tickers %}<button type="button" class="ticker-tag lookup-chip" data-symbol="{{ t.symbol }}" title="{{ t.name }}">{{ t.symbol }}</button>{% endfor %}
+</p>
+
+<div id="lookup-result" class="lookup-result" hidden></div>
+
+<p class="report-disclaimer lookup-note">Dữ liệu lấy trực tiếp từ nguồn công khai (Yahoo Finance; nếu không truy cập được sẽ dùng dữ liệu cuối tuần gần nhất của site cho các mã theo dõi). Thông tin chỉ mang tính tham khảo, không phải khuyến nghị đầu tư.</p>
+
+<script src="/js/lookup.js" defer></script>

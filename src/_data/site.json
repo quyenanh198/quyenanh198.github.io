@@ -8,6 +8,7 @@
     { "text": "Home", "url": "/" },
     { "text": "Blog", "url": "/blog/" },
     { "text": "Reports", "url": "/reports/" },
+    { "text": "Tra cứu", "url": "/lookup/" },
     { "text": "About", "url": "/about/" },
     { "text": "Contact", "url": "/contact/" }
   ],

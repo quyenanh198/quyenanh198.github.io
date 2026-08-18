@@ -112,4 +112,34 @@ ${sectorRows.map((r) => `| ${r.name} (${r.symbol}) | ${fmtPct(r.s.pctMonth)} | $
 await mkdir(OUT_DIR, { recursive: true });
 await writeFile(`${OUT_DIR}/${reportDate}-monthly-market.md`, body);
 console.log(`[monthly] wrote ${reportDate}-monthly-market.md`);
+
+// ---- Synthesized monthly analysis article (blog post) ----
+const short = (name) => name.split(" (")[0];
+const spyDir = spy.pctMonth > 0.15 ? "tăng" : spy.pctMonth < -0.15 ? "giảm" : "đi ngang";
+const article = `---
+layout: post.njk
+title: "Phân tích thị trường tháng ${monthLabel}"
+date: ${reportDate}
+excerpt: "S&P 500 ${fmtPct(spy.pctMonth)} trong tháng ${monthLabel} (YTD ${fmtPct(spy.pctYtd)}); ${short(topSectors[0].name)} dẫn dắt các ngành. Tổng hợp nhận định và chủ đề cần theo dõi tháng tới."
+---
+Tháng ${monthLabel} khép lại với thị trường ${tone}. S&P 500 ${spyDir} ${fmtPct(spy.pctMonth)}, nâng thành quả từ đầu năm lên ${fmtPct(spy.pctYtd)}; quy mô 3 tháng gần nhất đạt ${fmtPct(spy.pct3m)}. ${regime}
+
+## Bức tranh ngành trong tháng
+
+Ba ngành mạnh nhất tháng là ${topSectors.map((r) => `**${short(r.name)}** (${r.symbol}, ${fmtPct(r.s.pctMonth)})`).join(", ")}, trong khi ${bottomSectors.map((r) => `${short(r.name)} (${fmtPct(r.s.pctMonth)})`).join(", ")} xếp cuối bảng. ${topSectors[0].s.pct3m > 0 ? `Đáng chú ý, ${short(topSectors[0].name)} đã mạnh xuyên suốt quý (${fmtPct(topSectors[0].s.pct3m)} trong 3 tháng) — sự dẫn dắt kéo dài như vậy thường là xu hướng đáng tin cậy hơn một nhịp bật đơn lẻ.` : `Tuy nhiên ${short(topSectors[0].name)} vẫn ${fmtPct(topSectors[0].s.pct3m)} trong 3 tháng — sức mạnh tháng này mới chỉ là nhịp hồi trong xu hướng rộng hơn, cần thêm xác nhận.`}
+
+## Chủ đề của tháng tới
+
+- Liệu nhóm dẫn dắt (${topSectors[0].symbol}, ${topSectors[1].symbol}) có giữ được sức mạnh tương đối — luân chuyển bền từ 2 tháng trở lên mới đáng để định vị theo.
+- **SPY**: biên độ tháng ${fmtPrice(spy.month.low)}–${fmtPrice(spy.month.high)}; thủng đáy tháng là tín hiệu thay đổi cấu trúc xu hướng đầu tiên.
+- ${short(bottomSectors[0].name)} yếu nhất tháng — chờ tuần tăng đầu tiên kèm khối lượng trước khi kỳ vọng hồi phục.
+
+---
+
+*Số liệu chi tiết: [báo cáo thị trường tháng ${monthLabel}](/reports/${reportDate}-monthly-market/). Bài viết được tạo tự động từ dữ liệu thị trường, không phải khuyến nghị đầu tư.*
+`;
+await mkdir("src/posts", { recursive: true });
+await writeFile(`src/posts/${reportDate}-phan-tich-thi-truong-thang.md`, article);
+console.log(`[monthly] wrote post ${reportDate}-phan-tich-thi-truong-thang.md`);
+
 if (missing.length) console.warn(`[monthly] done with missing symbols: ${missing.join(", ")}`);

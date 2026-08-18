@@ -207,6 +207,104 @@ export function average(xs) {
   return v.length ? v.reduce((a, b) => a + b, 0) / v.length : NaN;
 }
 
+// ---- Technical indicators (computed on daily data) ----
+
+export function sma(values, n) {
+  if (values.length < n) return NaN;
+  return average(values.slice(-n));
+}
+
+function ema(values, n) {
+  if (values.length < n) return [];
+  const k = 2 / (n + 1);
+  const out = [average(values.slice(0, n))];
+  for (let i = n; i < values.length; i++) {
+    out.push(values[i] * k + out.at(-1) * (1 - k));
+  }
+  return out;
+}
+
+// Wilder's RSI.
+export function rsi(closes, n = 14) {
+  if (closes.length < n + 1) return NaN;
+  let gain = 0, loss = 0;
+  for (let i = 1; i <= n; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d > 0) gain += d; else loss -= d;
+  }
+  gain /= n; loss /= n;
+  for (let i = n + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    gain = (gain * (n - 1) + Math.max(d, 0)) / n;
+    loss = (loss * (n - 1) + Math.max(-d, 0)) / n;
+  }
+  if (loss === 0) return 100;
+  return 100 - 100 / (1 + gain / loss);
+}
+
+// MACD(12,26,9): returns {line, signal, hist, prevHist}.
+export function macd(closes, fast = 12, slow = 26, signalN = 9) {
+  if (closes.length < slow + signalN + 1) return null;
+  const emaFast = ema(closes, fast);
+  const emaSlow = ema(closes, slow);
+  const line = emaSlow.map((v, i) => emaFast[i + (slow - fast)] - v);
+  const signal = ema(line, signalN);
+  const histSeries = signal.map((v, i) => line[i + signalN - 1] - v);
+  return {
+    line: line.at(-1),
+    signal: signal.at(-1),
+    hist: histSeries.at(-1),
+    prevHist: histSeries.at(-2) ?? NaN,
+  };
+}
+
+// Wilder's ATR.
+export function atr(rows, n = 14) {
+  if (rows.length < n + 1) return NaN;
+  const trs = [];
+  for (let i = 1; i < rows.length; i++) {
+    trs.push(Math.max(
+      rows[i].high - rows[i].low,
+      Math.abs(rows[i].high - rows[i - 1].close),
+      Math.abs(rows[i].low - rows[i - 1].close),
+    ));
+  }
+  let a = average(trs.slice(0, n));
+  for (let i = n; i < trs.length; i++) a = (a * (n - 1) + trs[i]) / n;
+  return a;
+}
+
+// Technical snapshot as of the end of the most recent completed week:
+// moving averages, RSI, MACD, ATR, key swing levels, and a trend call.
+export function technicalStats(dailyRows, today = new Date()) {
+  const weeks = completedWeeks(toWeekly(dailyRows), today);
+  if (weeks.length < 6) return null;
+  const end = weeks.at(-1).lastDate;
+  const daily = dailyRows.filter((r) => r.date <= end);
+  const closes = daily.map((r) => r.close);
+  if (closes.length < 60) return null;
+  const close = closes.at(-1);
+  const sma20 = sma(closes, 20);
+  const sma50 = sma(closes, 50);
+  const sma200 = closes.length >= 200 ? sma(closes, 200) : NaN;
+  const last13 = weeks.slice(-13);
+  const trend =
+    close > sma20 && sma20 > sma50 ? "up" :
+    close < sma20 && sma20 < sma50 ? "down" : "sideways";
+  return {
+    close, sma20, sma50, sma200,
+    rsi14: rsi(closes),
+    macd: macd(closes),
+    atr14: atr(daily.slice(-80)),
+    high13w: Math.max(...last13.map((w) => w.high)),
+    low13w: Math.min(...last13.map((w) => w.low)),
+    swingLow4w: Math.min(...weeks.slice(-4).map((w) => w.low)),
+    swingHigh4w: Math.max(...weeks.slice(-4).map((w) => w.high)),
+    trend,
+    aboveSma200: Number.isFinite(sma200) ? close > sma200 : null,
+  };
+}
+
 // Stats for the most recent completed week of a symbol.
 // Needs >= 6 completed weeks for the ratios; returns null when data is too thin.
 export function weeklyStats(dailyRows, today = new Date()) {

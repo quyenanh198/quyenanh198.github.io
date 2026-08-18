@@ -285,7 +285,7 @@
   var view = { series: null, intraday: false, rangeLabel: DEFAULT_LABEL };
   var IND_DEFAULTS = {
     sma20: true, sma50: true, sma200: false, ema20: false, bb: false,
-    sr: false, ichi: false, vol: true, rsi: false, stoch: false, macd: false,
+    sr: false, ichi: false, plan: false, vol: true, rsi: false, stoch: false, macd: false,
   };
   var PARAM_DEFAULTS = {
     sma1: 20, sma2: 50, sma3: 200, ema: 20, bbP: 20, bbK: 2,
@@ -332,6 +332,7 @@
       case "bb": return "BB(" + params.bbP + "," + params.bbK + ")";
       case "sr": return "S/R";
       case "ichi": return "Ichimoku";
+      case "plan": return "Entry/SL";
       case "vol": return "Volume";
       case "rsi": return "RSI " + params.rsi;
       case "stoch": return "Stoch(" + params.stochK + "," + params.stochKS + "," + params.stochD + ")";
@@ -347,6 +348,7 @@
     { key: "bb", color: "#9a9aa2" },
     { key: "sr", color: "#c9a227" },
     { key: "ichi", color: "#1a7f4b" },
+    { key: "plan", color: "" },
     { key: "vol", color: "" },
     { key: "rsi", color: "#e6a23c" },
     { key: "stoch", color: "#2aa9a9" },
@@ -587,6 +589,98 @@
     return groups.slice(0, maxN).map(function (g) { return { price: g.avg, touches: g.n }; });
   }
 
+  // Canvas primitive that fills the area between Senkou A and Senkou B
+  // (lightweight-charts v4.1+ series primitive API). Drawn below the series.
+  function makeCloudPrimitive(ichi, gainC, lossC) {
+    var chartRef = null, seriesRef = null;
+    var bMap = {};
+    ichi.spanB.forEach(function (p) {
+      if (typeof p.value === "number") bMap[String(p.time)] = p.value;
+    });
+    var pts = [];
+    ichi.spanA.forEach(function (p) {
+      var b = bMap[String(p.time)];
+      if (typeof p.value === "number" && typeof b === "number") {
+        pts.push({ time: p.time, a: p.value, b: b });
+      }
+    });
+    var renderer = {
+      draw: function (target) {
+        if (!chartRef || !seriesRef) return;
+        target.useBitmapCoordinateSpace(function (scope) {
+          var ctx = scope.context;
+          var hr = scope.horizontalPixelRatio, vr = scope.verticalPixelRatio;
+          var ts = chartRef.timeScale();
+          var coords = [];
+          for (var i = 0; i < pts.length; i++) {
+            var x = ts.timeToCoordinate(pts[i].time);
+            if (x === null) { coords.push(null); continue; }
+            var ya = seriesRef.priceToCoordinate(pts[i].a);
+            var yb = seriesRef.priceToCoordinate(pts[i].b);
+            if (ya === null || yb === null) { coords.push(null); continue; }
+            coords.push({ x: x * hr, ya: ya * vr, yb: yb * vr, up: pts[i].a >= pts[i].b });
+          }
+          for (var j = 0; j < coords.length - 1; j++) {
+            var p1 = coords[j], p2 = coords[j + 1];
+            if (!p1 || !p2) continue;
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.ya);
+            ctx.lineTo(p2.x, p2.ya);
+            ctx.lineTo(p2.x, p2.yb);
+            ctx.lineTo(p1.x, p1.yb);
+            ctx.closePath();
+            ctx.fillStyle = p1.up && p2.up ? gainC + "2e" : !p1.up && !p2.up ? lossC + "2e" : "#9a9aa22a";
+            ctx.fill();
+          }
+        });
+      },
+    };
+    var paneView = {
+      renderer: function () { return renderer; },
+      zOrder: function () { return "bottom"; },
+    };
+    return {
+      attached: function (p) { chartRef = p.chart; seriesRef = p.series; },
+      detached: function () { chartRef = null; seriesRef = null; },
+      paneViews: function () { return [paneView]; },
+      updateAllViews: function () {},
+    };
+  }
+
+  // Entry / stop-loss / take-profit suggestion computed from the indicators
+  // of the series currently on screen (any timeframe).
+  function chartTradePlan(series) {
+    if (!series || series.length < 60) return null;
+    var closes = series.map(function (p) { return p.c; });
+    var close = closes[closes.length - 1];
+    var s20 = sma(closes, 20), s50 = sma(closes, 50);
+    var atr = atrFromSeries(series, 14);
+    if (!isFinite(atr)) atr = close * 0.02;
+    var last20 = series.slice(-20);
+    var lo = function (p) { return typeof p.l === "number" ? p.l : p.c; };
+    var hi = function (p) { return typeof p.h === "number" ? p.h : p.c; };
+    var support = Math.min.apply(null, last20.map(lo));
+    var resist = Math.max.apply(null, last20.map(hi));
+    var trend = close > s20 && s20 > s50 ? "up" : close < s20 && s20 < s50 ? "down" : "side";
+    if (trend === "down") return { noEntry: true, reclaim: s20, support: support };
+    var entryLo, entryHi, stop, target;
+    if (trend === "up") {
+      entryLo = s20; entryHi = s20 + atr;
+      stop = Math.min(support, s20 - atr);
+      target = close >= resist * 0.99 ? close + 2 * atr : resist;
+    } else {
+      entryLo = support; entryHi = support + atr;
+      stop = support - atr;
+      target = resist;
+    }
+    var mid = (entryLo + entryHi) / 2;
+    return {
+      entryLo: entryLo, entryHi: entryHi, stop: stop, target: target,
+      riskPct: ((mid - stop) / mid) * 100,
+      rr: stop < mid && target > mid ? (target - mid) / (mid - stop) : NaN,
+    };
+  }
+
   function makeChart(el, intraday, showTimeAxis) {
     var text = cssVar("--fg-muted") || "#6b6b6b";
     var border = cssVar("--border") || "#e6e6e2";
@@ -741,11 +835,19 @@
     if (indicators.ichi) {
       var ichi = ichimokuArr(series, params.ichiT, params.ichiK, params.ichiB, futureTail);
       if (ichi) {
-        overlayLine(ichi.spanA, "#1a7f4b", 1);
+        var spanASeries = mainChart.addLineSeries({
+          color: "#1a7f4b", lineWidth: 1,
+          priceLineVisible: false, lastValueVisible: false,
+          crosshairMarkerVisible: false,
+        });
+        spanASeries.setData(ichi.spanA);
         overlayLine(ichi.spanB, "#b06fd8", 1);
         overlayLine(ichi.tenkan, "#e6a23c", 1);
         overlayLine(ichi.kijun, "#c0392b", 1);
         overlayLine(ichi.chikou, "#9a9aa2", 1, 2);
+        if (typeof spanASeries.attachPrimitive === "function") {
+          spanASeries.attachPrimitive(makeCloudPrimitive(ichi, gain, loss));
+        }
       }
     }
     if (indicators.sr) {
@@ -760,6 +862,36 @@
         });
       });
     }
+
+    var planNote = "";
+    if (indicators.plan) {
+      var plan = chartTradePlan(series);
+      var addPlanLine = function (price, color, style, title) {
+        priceSeries.createPriceLine({
+          price: price, color: color, lineWidth: 1, lineStyle: style,
+          axisLabelVisible: true, title: title,
+        });
+      };
+      if (!plan) {
+        planNote = "Entry/SL: chưa đủ dữ liệu trên khung này.";
+      } else if (plan.noEntry) {
+        addPlanLine(plan.reclaim, "#5b8def", 2, "Chờ vượt");
+        addPlanLine(plan.support, loss, 0, "Hỗ trợ");
+        planNote = "Entry/SL: xu hướng giảm trên khung này — chưa có điểm mua; chờ giá vượt và giữ trên " +
+          fmt.price(plan.reclaim) + " (SMA20), hỗ trợ cần giữ " + fmt.price(plan.support) + ".";
+      } else {
+        addPlanLine(plan.entryLo, "#5b8def", 2, "Entry");
+        addPlanLine(plan.entryHi, "#5b8def", 2, "Entry");
+        addPlanLine(plan.stop, loss, 0, "SL");
+        addPlanLine(plan.target, gain, 0, "TP");
+        planNote = "Entry/SL (theo khung hiện tại): mua " + fmt.price(plan.entryLo) + "–" + fmt.price(plan.entryHi) +
+          " · SL " + fmt.price(plan.stop) + " (rủi ro ~" + plan.riskPct.toFixed(1) + "%)" +
+          " · TP " + fmt.price(plan.target) +
+          (isFinite(plan.rr) ? " · R:R ≈ " + plan.rr.toFixed(1) + ":1" : "") + ". Chỉ mang tính tham khảo.";
+      }
+    }
+    var noteEl = document.getElementById("chart-note");
+    if (noteEl && indicators.plan) noteEl.textContent = planNote;
 
     if (indicators.rsi && rsiEl && series.length >= params.rsi + 1) {
       var rsiChart = makeChart(rsiEl, view.intraday, bottomPane === "rsi");

@@ -5,6 +5,8 @@
   "description": "Personal site and blog",
   "scripts": {
     "build": "eleventy",
+    "reports:weekly": "node scripts/generate-weekly.mjs",
+    "reports:monthly": "node scripts/generate-monthly.mjs",
     "serve": "eleventy --serve",
     "debug": "DEBUG=Eleventy* eleventy"
   },

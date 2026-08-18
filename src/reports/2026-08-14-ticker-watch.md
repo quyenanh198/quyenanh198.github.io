@@ -1,7 +1,7 @@
 ---
 layout: report.njk
 title: "Watchlist tuần 10–14/08/2026"
-date: 2026-08-18
+date: 2026-08-14
 reportType: ticker
 tickers: [AAPL, MSFT, NVDA, GOOGL, AMZN, META, TSLA]
 excerpt: "TSLA dẫn đầu watchlist (+4.2%), NVDA lập đỉnh 3 tháng; AMZN yếu nhất (−4.3%). MSFT giữ vững thành quả sau nhịp tăng 26% trong 4 tuần."

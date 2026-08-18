@@ -1,7 +1,7 @@
 ---
 layout: report.njk
 title: "Thị trường tuần 10–14/08/2026"
-date: 2026-08-18
+date: 2026-08-14
 reportType: weekly
 tickers: [SPY, QQQ, DIA, IWM]
 excerpt: "Chỉ số tiếp tục neo gần đỉnh: QQQ +1.1%, IWM +1.2%, SPY +0.4%; riêng Dow Jones điều chỉnh nhẹ. Đà tăng 4 tuần vẫn nguyên vẹn."

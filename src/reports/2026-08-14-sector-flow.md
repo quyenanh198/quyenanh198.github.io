@@ -1,7 +1,7 @@
 ---
 layout: report.njk
 title: "Dòng tiền ngành tuần 10–14/08/2026"
-date: 2026-08-18
+date: 2026-08-14
 reportType: sector-flow
 tickers: [XLE, XLU, XLC, XLP, XLK, XLV, XLF, XLI, XLRE, XLB, XLY]
 excerpt: "Năng lượng hút tiền vượt trội (+7.7%), nhóm phòng thủ (Tiện ích, Tiêu dùng thiết yếu) mạnh hơn thị trường; tiền rút khỏi Tiêu dùng không thiết yếu và Vật liệu."

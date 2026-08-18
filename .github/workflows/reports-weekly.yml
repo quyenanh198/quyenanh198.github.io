@@ -1,0 +1,54 @@
+name: Weekly market reports
+
+on:
+  schedule:
+    # 01:00 UTC Saturday = 08:00 sáng thứ 7 giờ Việt Nam, sau khi thị trường Mỹ đóng cửa tuần
+    - cron: "0 1 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Generate weekly reports
+        run: node scripts/generate-weekly.mjs
+      - name: Commit new reports
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/reports
+          if git diff --cached --quiet; then
+            echo "No new reports to commit"
+          else
+            git commit -m "Auto: weekly reports $(date -u +%F)"
+            git push
+          fi
+      - run: npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: generate
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

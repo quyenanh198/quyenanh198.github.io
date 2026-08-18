@@ -18,21 +18,21 @@ RS = sức mạnh tương đối so với SPY (+0.40%). Dòng tiền = giá tr�
 |---|---:|---:|---:|---|
 | Năng lượng (Energy) (XLE) | +7.67% | +7.27% | 0.86× | Tăng, thanh khoản mỏng |
 | Tiện ích (Utilities) (XLU) | +1.61% | +1.21% | 0.97× | Tăng, thanh khoản mỏng |
-| Dịch vụ truyền thông (Communication Services) (XLC) | +1.53% | +1.13% | 0.80× | Tăng, thanh khoản mỏng |
+| Dịch vụ truyền thông (Communication Services) (XLC) | +1.53% | +1.13% | 0.74× | Tăng, thanh khoản mỏng |
 | Tiêu dùng thiết yếu (Consumer Staples) (XLP) | +1.14% | +0.74% | 0.71× | Tăng, thanh khoản mỏng |
 | Công nghệ (Technology) (XLK) | +1.09% | +0.69% | 0.63× | Tăng, thanh khoản mỏng |
 | Y tế (Health Care) (XLV) | +1.02% | +0.62% | 0.68× | Tăng, thanh khoản mỏng |
 | Tài chính (Financials) (XLF) | +0.97% | +0.57% | 0.71× | Tăng, thanh khoản mỏng |
 | Công nghiệp (Industrials) (XLI) | +0.72% | +0.32% | 0.72× | Tăng, thanh khoản mỏng |
 | Bất động sản (Real Estate) (XLRE) | +0.64% | +0.25% | 1.13× | Hút tiền |
-| Vật liệu (Materials) (XLB) | −0.61% | −1.00% | 1.05× | Bị rút tiền |
+| Vật liệu (Materials) (XLB) | −0.61% | −1.00% | 0.93× | Bị rút tiền |
 | Tiêu dùng không thiết yếu (Consumer Discretionary) (XLY) | −1.38% | −1.78% | 0.63× | Yếu, thanh khoản mỏng |
 
 ## Phân tích luân chuyển
 
 Nhóm hút tiền rõ nhất tuần này: **Bất động sản** (XLRE, +0.64%, dòng tiền 1.13×) — vừa vượt trội thị trường vừa có giá trị giao dịch từ mức trung bình trở lên, tín hiệu tích lũy chủ động.
 
-Ở chiều ngược lại, **Vật liệu** (XLB, −0.61%, dòng tiền 1.05×) giảm giá với giá trị giao dịch đáng kể — dấu hiệu phân phối chủ động thay vì chỉ thiếu người mua.
+Ở chiều ngược lại, **Vật liệu** (XLB, −0.61%, dòng tiền 0.93×) giảm giá với giá trị giao dịch đáng kể — dấu hiệu phân phối chủ động thay vì chỉ thiếu người mua.
 
 Đáng chú ý về thanh khoản: Bất động sản (1.13×) có giá trị giao dịch vượt trung bình 4 tuần — những điểm đến tiềm năng của dòng tiền cần theo dõi tiếp.
 

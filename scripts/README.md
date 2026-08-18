@@ -11,8 +11,10 @@ GitHub Actions (cron)
        ├─ fetch giá EOD miễn phí: Stooq (chính) → Yahoo Finance (dự phòng)
        ├─ tính toán: % tuần/tháng, sức mạnh tương đối so SPY,
        │  dòng tiền (giá × khối lượng so trung bình), khoảng cách đỉnh 13 tuần…
+       ├─ tính chỉ báo kỹ thuật: SMA 20/50/200, RSI(14), MACD(12,26,9), ATR(14)
        ├─ sinh báo cáo markdown tiếng Việt vào src/reports/
-       └─ viết bài phân tích tổng hợp (văn xuôi) vào src/posts/ → hiện trên Blog
+       └─ viết bài phân tích tổng hợp vào src/posts/ → hiện trên Blog
+          (xu hướng, động lượng, vùng mua / dừng lỗ / chốt lời tham khảo cho từng mã)
   └─ commit báo cáo + bài viết mới vào master
   └─ npm run build (Eleventy) → deploy GitHub Pages
 ```

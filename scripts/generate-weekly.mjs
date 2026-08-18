@@ -4,7 +4,7 @@
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import {
-  fetchDaily, weeklyStats, fmtPct, fmtPrice, fmtRatio,
+  fetchDaily, weeklyStats, technicalStats, fmtPct, fmtPrice, fmtRatio,
   weekRangeLabel, average,
 } from "./lib/marketdata.mjs";
 
@@ -23,11 +23,14 @@ const symbols = [
   ...watchlist.tickers.map((t) => t.symbol),
 ];
 const stats = {};
+const tech = {};
 for (const symbol of symbols) {
   const rows = await fetchDaily(symbol, { today });
   const st = rows && weeklyStats(rows, today);
-  if (st) stats[symbol] = st;
-  else console.warn(`[weekly] skipping ${symbol}: no usable data`);
+  if (st) {
+    stats[symbol] = st;
+    tech[symbol] = technicalStats(rows, today);
+  } else console.warn(`[weekly] skipping ${symbol}: no usable data`);
 }
 
 const missing = symbols.filter((s) => !stats[s]);
@@ -56,6 +59,74 @@ const frontMatter = (o) =>
 
 const dir = (x, up, flat, down, eps = 0.15) => (x > eps ? up : x < -eps ? down : flat);
 const short = (name) => name.split(" (")[0];
+
+// ---- Indicator narration helpers ----
+
+const trendText = (t) =>
+  t.trend === "up"
+    ? `**xu hướng tăng** — giá trên SMA20 (${fmtPrice(t.sma20)}) và SMA20 trên SMA50 (${fmtPrice(t.sma50)})${t.aboveSma200 === true ? ", đồng pha với xu hướng dài hạn trên SMA200" : t.aboveSma200 === false ? `, nhưng vẫn dưới SMA200 (${fmtPrice(t.sma200)}) nên xu hướng dài hạn chưa xác nhận` : ""}`
+    : t.trend === "down"
+    ? `**xu hướng giảm** — giá dưới SMA20 (${fmtPrice(t.sma20)}) và SMA20 dưới SMA50 (${fmtPrice(t.sma50)})${t.aboveSma200 === false ? ", đồng thời nằm dưới SMA200 — xu hướng giảm trên mọi khung" : ""}`
+    : `**đi ngang / hỗn hợp** — giá ${t.close > t.sma20 ? "trên" : "dưới"} SMA20 (${fmtPrice(t.sma20)}) trong khi SMA50 (${fmtPrice(t.sma50)}) đi phẳng`;
+
+const momentumText = (t) => {
+  const r = t.rsi14;
+  const rsiPart =
+    r >= 70 ? `RSI(14) ở ${r.toFixed(0)} — vùng quá mua, xác suất rung lắc ngắn hạn cao` :
+    r <= 30 ? `RSI(14) ở ${r.toFixed(0)} — vùng quá bán, dễ có nhịp hồi kỹ thuật` :
+    r >= 55 ? `RSI(14) ở ${r.toFixed(0)} — động lượng tích cực` :
+    r > 45 ? `RSI(14) trung tính quanh ${r.toFixed(0)}` :
+    `RSI(14) ở ${r.toFixed(0)} — động lượng suy yếu`;
+  const m = t.macd;
+  const macdPart = !m ? "" :
+    m.hist > 0 && m.hist >= m.prevHist ? "; MACD trên đường tín hiệu với histogram mở rộng — lực tăng còn khỏe" :
+    m.hist > 0 ? "; MACD còn trên đường tín hiệu nhưng histogram đang thu hẹp — đà tăng chậm lại" :
+    m.hist < 0 && m.hist <= m.prevHist ? "; MACD dưới đường tín hiệu, histogram nới rộng chiều âm — áp lực bán chưa dừng" :
+    "; MACD dưới đường tín hiệu nhưng histogram thu hẹp — lực bán yếu dần";
+  return rsiPart + macdPart;
+};
+
+// Reference entry/stop/target zones derived from trend, MAs, ATR and swing levels.
+const planFor = (t) => {
+  const a = Number.isFinite(t.atr14) ? t.atr14 : t.close * 0.02;
+  if (t.trend === "up") {
+    const target = t.close >= t.high13w * 0.98 ? t.close + 2 * a : t.high13w;
+    const stop = Math.min(t.swingLow4w, t.sma20 - a);
+    return {
+      entry: t.rsi14 >= 70
+        ? `RSI đang quá mua nên tránh mua đuổi; vùng mua hợp lý là nhịp điều chỉnh về ${fmtPrice(t.sma20)}–${fmtPrice(t.sma20 + a)} (quanh SMA20)`
+        : `nhịp điều chỉnh về ${fmtPrice(t.sma20)}–${fmtPrice(t.sma20 + a)} (quanh SMA20), hoặc mua theo đà khi vượt ${fmtPrice(Math.max(t.swingHigh4w, t.close))} kèm khối lượng lớn`,
+      stop, target,
+    };
+  }
+  if (t.trend === "down") {
+    return {
+      down: true,
+      entry: `chưa có điểm mua thuận xu hướng — chỉ cân nhắc giải ngân khi giá đóng tuần lấy lại SMA50 (${fmtPrice(t.sma50)})`,
+      exitNote: `nếu đang nắm giữ, các nhịp hồi về SMA20 (${fmtPrice(t.sma20)}) là vùng hạ tỷ trọng; hỗ trợ sâu hơn tại đáy 13 tuần ${fmtPrice(t.low13w)}`,
+    };
+  }
+  return {
+    entry: `canh mua tại cận dưới biên tích lũy ${fmtPrice(t.swingLow4w)}–${fmtPrice(t.swingLow4w + a)}, ưu tiên khi RSI quay đầu hướng lên`,
+    stop: t.swingLow4w - a,
+    target: t.swingHigh4w,
+  };
+};
+
+const planText = (t) => {
+  const p = planFor(t);
+  if (p.down) return `- **Điểm mua tham khảo**: ${p.entry}.\n- **Quản trị vị thế**: ${p.exitNote}.`;
+  const riskPct = ((t.close - p.stop) / t.close) * 100;
+  const upsidePct = ((p.target - t.close) / t.close) * 100;
+  return [
+    `- **Điểm mua tham khảo**: ${p.entry}.`,
+    `- **Dừng lỗ**: dưới ${fmtPrice(p.stop)} (rủi ro ~${riskPct.toFixed(1)}% từ giá hiện tại).`,
+    `- **Mục tiêu / vùng chốt lời**: ${fmtPrice(p.target)} (dư địa ~${upsidePct.toFixed(1)}%${p.target > t.high13w * 0.999 && t.close >= t.high13w * 0.98 ? ", ước theo 2×ATR do giá đang ở vùng đỉnh" : ""}).`,
+  ].join("\n");
+};
+
+const techParagraph = (t) =>
+  `Xu hướng: ${trendText(t)}. Động lượng: ${momentumText(t)}. Biến động trung bình (ATR14) ${fmtPrice(t.atr14)}/phiên.`;
 
 // ---- Shared derived data ----
 
@@ -233,7 +304,7 @@ ${tickerRows.map((r) => `| ${r.symbol} | ${fmtPrice(r.s.close)} | ${fmtPct(r.s.p
 
 ${tickerRows.map((r) => `### ${r.symbol} — ${r.name}
 
-${r.symbol} ${trendPhrase(r.s)} với mức ${fmtPct(r.s.pctWeek)} (4 tuần: ${fmtPct(r.s.pct4w)}), ${highPhrase(r.s)}. ${volPhrase(r.s)} Vùng giá đáng chú ý: hỗ trợ ${fmtPrice(r.s.weekLow)} (đáy tuần), kháng cự ${fmtPrice(r.s.weekHigh)} (đỉnh tuần).`).join("\n\n")}
+${r.symbol} ${trendPhrase(r.s)} với mức ${fmtPct(r.s.pctWeek)} (4 tuần: ${fmtPct(r.s.pct4w)}), ${highPhrase(r.s)}. ${volPhrase(r.s)} Vùng giá đáng chú ý: hỗ trợ ${fmtPrice(r.s.weekLow)} (đáy tuần), kháng cự ${fmtPrice(r.s.weekHigh)} (đỉnh tuần).${tech[r.symbol] ? ` ${techParagraph(tech[r.symbol])}` : ""}`).join("\n\n")}
 
 ## Đáng theo dõi tuần tới
 
@@ -264,23 +335,48 @@ ${watchNext.map((r, i) => `${i + 1}. **${r.symbol}** — ${r === nearHigh ? `c�
   })}
 Tuần giao dịch ${range} khép lại với thị trường ${tone}: S&P 500 ${spyDir} ${fmtPct(spy.pctWeek)} (đóng tuần ${fmtPrice(spy.close)}), ${leader.symbol} dẫn đầu các chỉ số với ${fmtPct(leader.s.pctWeek)} còn ${laggard.symbol} xếp cuối với ${fmtPct(laggard.s.pctWeek)}. Đặt trong bức tranh 4 tuần, SPY đã ${dir(spy.pct4w, `tích lũy được ${fmtPct(spy.pct4w)}`, "gần như đi ngang", `mất ${fmtPct(spy.pct4w)}`, 0.5)}${spy.fromHigh13w > -2 ? " và đang đứng sát vùng đỉnh 13 tuần" : ""}. ${volNote} ${breadthLine}
 
+## Góc nhìn kỹ thuật: các chỉ số chính
+
+${["SPY", "QQQ"].filter((s) => tech[s]).map((s) => {
+    const t = tech[s];
+    const w = stats[s];
+    return `### ${s} — ${s === "SPY" ? "S&P 500" : "NASDAQ-100"}
+
+${techParagraph(t)}
+
+Kịch bản tuần tới: giữ trên hỗ trợ ${fmtPrice(w.weekLow)} (đáy tuần)${t.trend === "up" ? ` và SMA20 (${fmtPrice(t.sma20)})` : ""} thì cấu trúc hiện tại còn nguyên; vượt kháng cự ${fmtPrice(Math.max(w.weekHigh, t.swingHigh4w))} kèm khối lượng cải thiện sẽ mở dư địa tăng mới${t.trend !== "down" ? `, ngược lại thủng ${fmtPrice(t.sma50)} (SMA50) là cảnh báo xu hướng trung hạn đầu tiên` : `; nếu tiếp tục yếu, hỗ trợ sâu hơn nằm ở đáy 13 tuần ${fmtPrice(t.low13w)}`}.`;
+  }).join("\n\n")}
+
 ## Dòng tiền đang chảy về đâu?
 
 Xếp hạng 11 nhóm ngành tuần này cho thấy **${topSector.shortName}** đứng đầu (${fmtPct(topSector.s.pctWeek)}) và **${bottomSector.shortName}** đứng cuối (${fmtPct(bottomSector.s.pctWeek)}); cơ cấu sức mạnh tương đối ${tilt}. ${flowStory}${outflowStory}
 
-## Nhóm cổ phiếu theo dõi
+${tech[topSector.symbol] ? `Về mặt kỹ thuật, ${topSector.symbol} hiện ở ${trendText(tech[topSector.symbol])}; ${momentumText(tech[topSector.symbol])}. Nhà đầu tư muốn đi theo nhịp luân chuyển này nên chờ điểm vào hợp lý thay vì mua đuổi: ${planFor(tech[topSector.symbol]).entry}.` : ""}
 
-Trong watchlist, **${bestTicker.symbol}** dẫn đầu tuần với ${fmtPct(bestTicker.s.pctWeek)} (${trendPhrase(bestTicker.s)}), còn **${worstTicker.symbol}** yếu nhất với ${fmtPct(worstTicker.s.pctWeek)}. Xét về cấu trúc giá, **${nearHigh.symbol}** đáng chú ý nhất: chỉ cách đỉnh 13 tuần ${fmtPct(nearHigh.s.fromHigh13w)}${nearHigh.s.pct4w > 0 ? ` sau khi tăng ${fmtPct(nearHigh.s.pct4w)} trong 4 tuần` : ""} — một cú vượt đỉnh kèm khối lượng sẽ là tín hiệu dẫn dắt cho cả nhóm.
+## Phân tích watchlist: xu hướng và điểm mua/bán tham khảo
+
+Trong watchlist, **${bestTicker.symbol}** dẫn đầu tuần với ${fmtPct(bestTicker.s.pctWeek)}, còn **${worstTicker.symbol}** yếu nhất với ${fmtPct(worstTicker.s.pctWeek)}. Dưới đây là góc nhìn kỹ thuật từng mã — vùng giá chỉ mang tính tham khảo theo chỉ báo, không phải khuyến nghị.
+
+${tickerRows.map((r) => {
+    const t = tech[r.symbol];
+    if (!t) return `### ${r.symbol} — ${r.name}\n\nThiếu dữ liệu chỉ báo trong kỳ này.`;
+    return `### ${r.symbol} — ${r.name}
+
+Tuần qua ${fmtPct(r.s.pctWeek)} (4 tuần: ${fmtPct(r.s.pct4w)}), đóng tuần tại ${fmtPrice(r.s.close)}, cách đỉnh 13 tuần ${fmtPct(r.s.fromHigh13w)}. ${techParagraph(t)}
+
+${planText(t)}`;
+  }).join("\n\n")}
 
 ## Các mốc cần quan sát tuần tới
 
 - **SPY**: giữ trên ${fmtPrice(spy.weekLow)} (đáy tuần) thì xu hướng hiện tại còn nguyên; vượt ${fmtPrice(spy.weekHigh)} mở dư địa tăng mới.
 - **${topSector.symbol}**: sức mạnh của ${topSector.shortName} cần kéo dài sang tuần thứ hai để xác nhận luân chuyển thực sự.
-- **${nearHigh.symbol}**: theo dõi phản ứng tại vùng đỉnh — đây là "phép thử" tâm lý quan trọng nhất của nhóm watchlist.
+- **${nearHigh.symbol}**: cấu trúc giá mạnh nhất watchlist (${fmtPct(nearHigh.s.fromHigh13w)} so với đỉnh 13 tuần) — phản ứng tại vùng đỉnh là "phép thử" quan trọng nhất của nhóm.
+${outflows.length ? `- **${outflows[0].symbol}**: đang bị rút tiền chủ động — nếu tuần tới tiếp tục giảm kèm thanh khoản cao, nên tránh bắt đáy nhóm ${outflows[0].shortName}.` : ""}
 
 ---
 
-*Số liệu chi tiết: [thị trường tuần](/reports/${reportDate}-weekly-market/) · [dòng tiền ngành](/reports/${reportDate}-sector-flow/) · [watchlist](/reports/${reportDate}-ticker-watch/). Bài viết được tạo tự động từ dữ liệu thị trường, không phải khuyến nghị đầu tư.*
+*Số liệu chi tiết: [thị trường tuần](/reports/${reportDate}-weekly-market/) · [dòng tiền ngành](/reports/${reportDate}-sector-flow/) · [watchlist](/reports/${reportDate}-ticker-watch/). Bài viết được tạo tự động từ dữ liệu thị trường và chỉ báo kỹ thuật (SMA, RSI, MACD, ATR); mọi vùng giá chỉ mang tính tham khảo, không phải khuyến nghị đầu tư.*
 `;
   await writeFile(`${POSTS_DIR}/${reportDate}-phan-tich-thi-truong-tuan.md`, body);
   console.log(`[weekly] wrote post ${reportDate}-phan-tich-thi-truong-tuan.md`);

@@ -282,16 +282,74 @@
   var charts = [];
   var mainChart = null;
   var view = { series: null, intraday: false, rangeLabel: DEFAULT_LABEL };
-  var IND_DEFAULTS = { sma20: true, sma50: true, sma200: false, ema20: false, bb: false, vol: true, rsi: false, macd: false };
+  var IND_DEFAULTS = {
+    sma20: true, sma50: true, sma200: false, ema20: false, bb: false,
+    sr: false, ichi: false, vol: true, rsi: false, stoch: false, macd: false,
+  };
+  var PARAM_DEFAULTS = {
+    sma1: 20, sma2: 50, sma3: 200, ema: 20, bbP: 20, bbK: 2,
+    rsi: 14, macdF: 12, macdS: 26, macdSig: 9,
+    stochK: 14, stochKS: 3, stochD: 3,
+    ichiT: 9, ichiK: 26, ichiB: 52,
+    srWin: 10, srMax: 6,
+  };
+  var params = (function () {
+    try {
+      var s = localStorage.getItem("lookupIndParams");
+      if (s) {
+        var parsed = JSON.parse(s), out = {};
+        for (var k in PARAM_DEFAULTS) {
+          var v = Number(parsed[k]);
+          out[k] = isFinite(v) && v > 0 ? v : PARAM_DEFAULTS[k];
+        }
+        return out;
+      }
+    } catch (e) { /* ignore */ }
+    var copy = {};
+    for (var k2 in PARAM_DEFAULTS) copy[k2] = PARAM_DEFAULTS[k2];
+    return copy;
+  })();
+  function saveParams() {
+    try { localStorage.setItem("lookupIndParams", JSON.stringify(params)); } catch (e) { /* ignore */ }
+  }
+  var SETTING_GROUPS = [
+    { label: "SMA (3 đường)", keys: ["sma1", "sma2", "sma3"] },
+    { label: "EMA", keys: ["ema"] },
+    { label: "Bollinger (chu kỳ, độ lệch)", keys: ["bbP", "bbK"] },
+    { label: "RSI", keys: ["rsi"] },
+    { label: "MACD (nhanh, chậm, signal)", keys: ["macdF", "macdS", "macdSig"] },
+    { label: "Stochastic (%K, mượt K, %D)", keys: ["stochK", "stochKS", "stochD"] },
+    { label: "Ichimoku (Tenkan, Kijun, Senkou B)", keys: ["ichiT", "ichiK", "ichiB"] },
+    { label: "S/R (độ rộng pivot, số vạch tối đa)", keys: ["srWin", "srMax"] },
+  ];
+  function indLabel(key) {
+    switch (key) {
+      case "sma20": return "SMA " + params.sma1;
+      case "sma50": return "SMA " + params.sma2;
+      case "sma200": return "SMA " + params.sma3;
+      case "ema20": return "EMA " + params.ema;
+      case "bb": return "BB(" + params.bbP + "," + params.bbK + ")";
+      case "sr": return "S/R";
+      case "ichi": return "Ichimoku";
+      case "vol": return "Volume";
+      case "rsi": return "RSI " + params.rsi;
+      case "stoch": return "Stoch(" + params.stochK + "," + params.stochKS + "," + params.stochD + ")";
+      case "macd": return "MACD(" + params.macdF + "," + params.macdS + "," + params.macdSig + ")";
+      default: return key;
+    }
+  }
   var IND_META = [
-    { key: "sma20", label: "SMA20", color: "#e6a23c" },
-    { key: "sma50", label: "SMA50", color: "#5b8def" },
-    { key: "sma200", label: "SMA200", color: "#b06fd8" },
-    { key: "ema20", label: "EMA20", color: "#2aa9a9" },
-    { key: "bb", label: "BB(20,2)", color: "#9a9aa2" },
-    { key: "vol", label: "Volume", color: "" },
-    { key: "rsi", label: "RSI", color: "#e6a23c" },
-    { key: "macd", label: "MACD", color: "#5b8def" },
+    { key: "sma20", color: "#e6a23c" },
+    { key: "sma50", color: "#5b8def" },
+    { key: "sma200", color: "#b06fd8" },
+    { key: "ema20", color: "#2aa9a9" },
+    { key: "bb", color: "#9a9aa2" },
+    { key: "sr", color: "#c9a227" },
+    { key: "ichi", color: "#1a7f4b" },
+    { key: "vol", color: "" },
+    { key: "rsi", color: "#e6a23c" },
+    { key: "stoch", color: "#2aa9a9" },
+    { key: "macd", color: "#5b8def" },
   ];
   var indicators = (function () {
     try {
@@ -368,15 +426,15 @@
     return out;
   }
 
-  function macdSeriesArr(candles, gainC, lossC) {
+  function macdSeriesArr(candles, gainC, lossC, fP, sP, sigP) {
     var closes = candles.map(function (p) { return p.c; });
-    if (closes.length < 36) return null;
-    var f = emaArr(closes, 12), s = emaArr(closes, 26);
+    if (fP >= sP || closes.length < sP + sigP + 1) return null;
+    var f = emaArr(closes, fP), s = emaArr(closes, sP);
     var line = [];
-    for (var i = 0; i < s.length; i++) line.push(f[i + 14] - s[i]);
-    var sig = emaArr(line, 9);
+    for (var i = 0; i < s.length; i++) line.push(f[i + (sP - fP)] - s[i]);
+    var sig = emaArr(line, sigP);
     var out = { line: [], signal: [], hist: [] };
-    var startIdx = 33; // first candle with a signal value (25 + 8)
+    var startIdx = (sP - 1) + (sigP - 1); // first candle with a signal value
     for (var w = 0; w < startIdx; w++) {
       out.line.push({ time: candles[w].time });
       out.signal.push({ time: candles[w].time });
@@ -384,12 +442,114 @@
     }
     for (var j = 0; j < sig.length; j++) {
       var t = candles[startIdx + j].time;
-      var h = line[j + 8] - sig[j];
-      out.line.push({ time: t, value: line[j + 8] });
+      var h = line[j + sigP - 1] - sig[j];
+      out.line.push({ time: t, value: line[j + sigP - 1] });
       out.signal.push({ time: t, value: sig[j] });
       out.hist.push({ time: t, value: h, color: h >= 0 ? gainC + "88" : lossC + "88" });
     }
     return out;
+  }
+
+  // Stochastic %K/%D with %K smoothing, whitespace-padded for pane alignment.
+  function stochSeriesArr(candles, kP, kS, dP) {
+    var len = candles.length;
+    if (len < kP + kS + dP) return null;
+    var hi = function (p) { return typeof p.h === "number" ? p.h : p.c; };
+    var lo = function (p) { return typeof p.l === "number" ? p.l : p.c; };
+    var raw = [];
+    for (var i = kP - 1; i < len; i++) {
+      var hh = -Infinity, ll = Infinity;
+      for (var j = i - kP + 1; j <= i; j++) {
+        if (hi(candles[j]) > hh) hh = hi(candles[j]);
+        if (lo(candles[j]) < ll) ll = lo(candles[j]);
+      }
+      raw.push(((candles[i].c - ll) / ((hh - ll) || 1)) * 100);
+    }
+    var roll = function (vals, n) {
+      var out = [], sum = 0;
+      for (var x = 0; x < vals.length; x++) {
+        sum += vals[x];
+        if (x >= n) sum -= vals[x - n];
+        if (x >= n - 1) out.push(sum / n);
+      }
+      return out;
+    };
+    var kVals = roll(raw, kS);
+    var dVals = roll(kVals, dP);
+    var kStart = (kP - 1) + (kS - 1), dStart = kStart + (dP - 1);
+    var pad = function (start) {
+      var arr = [];
+      for (var w = 0; w < start; w++) arr.push({ time: candles[w].time });
+      return arr;
+    };
+    var kOut = pad(kStart), dOut = pad(dStart);
+    kVals.forEach(function (v, idx) { kOut.push({ time: candles[kStart + idx].time, value: v }); });
+    dVals.forEach(function (v, idx) { dOut.push({ time: candles[dStart + idx].time, value: v }); });
+    return { k: kOut, d: dOut };
+  }
+
+  // Ichimoku: tenkan/kijun, senkou A/B shifted forward within available bars,
+  // chikou shifted back. (The cloud is not projected past the last bar.)
+  function ichimokuArr(candles, tP, kP, bP) {
+    var len = candles.length;
+    if (len < bP + kP) return null;
+    var hi = function (p) { return typeof p.h === "number" ? p.h : p.c; };
+    var lo = function (p) { return typeof p.l === "number" ? p.l : p.c; };
+    var midpoint = function (i, n) {
+      var hh = -Infinity, ll = Infinity;
+      for (var j = i - n + 1; j <= i; j++) {
+        if (hi(candles[j]) > hh) hh = hi(candles[j]);
+        if (lo(candles[j]) < ll) ll = lo(candles[j]);
+      }
+      return (hh + ll) / 2;
+    };
+    var tenkan = [], kijun = [], spanA = [], spanB = [], chikou = [];
+    for (var i = 0; i < len; i++) {
+      if (i >= tP - 1) tenkan.push({ time: candles[i].time, value: midpoint(i, tP) });
+      if (i >= kP - 1) kijun.push({ time: candles[i].time, value: midpoint(i, kP) });
+      if (i >= kP - 1 && i >= tP - 1 && i + kP < len) {
+        spanA.push({ time: candles[i + kP].time, value: (midpoint(i, tP) + midpoint(i, kP)) / 2 });
+      }
+      if (i >= bP - 1 && i + kP < len) {
+        spanB.push({ time: candles[i + kP].time, value: midpoint(i, bP) });
+      }
+      if (i >= kP) chikou.push({ time: candles[i - kP].time, value: candles[i].c });
+    }
+    return { tenkan: tenkan, kijun: kijun, spanA: spanA, spanB: spanB, chikou: chikou };
+  }
+
+  // Support/resistance levels from clustered pivot highs/lows over the
+  // most recent ~300 bars.
+  function srLevelsArr(candles, win, maxN) {
+    var rows = candles.slice(-300);
+    if (rows.length < win * 2 + 1) return [];
+    var hi = function (p) { return typeof p.h === "number" ? p.h : p.c; };
+    var lo = function (p) { return typeof p.l === "number" ? p.l : p.c; };
+    var piv = [];
+    for (var i = win; i < rows.length - win; i++) {
+      var isH = true, isL = true;
+      for (var j = i - win; j <= i + win; j++) {
+        if (j === i) continue;
+        if (hi(rows[j]) > hi(rows[i])) isH = false;
+        if (lo(rows[j]) < lo(rows[i])) isL = false;
+        if (!isH && !isL) break;
+      }
+      if (isH) piv.push({ p: hi(rows[i]), i: i });
+      if (isL) piv.push({ p: lo(rows[i]), i: i });
+    }
+    piv.sort(function (a, b) { return a.p - b.p; });
+    var groups = [];
+    piv.forEach(function (v) {
+      var g = groups[groups.length - 1];
+      if (g && Math.abs(v.p - g.avg) / g.avg < 0.008) {
+        g.sum += v.p; g.n++; g.avg = g.sum / g.n;
+        if (v.i > g.last) g.last = v.i;
+      } else {
+        groups.push({ sum: v.p, n: 1, avg: v.p, last: v.i });
+      }
+    });
+    groups.sort(function (a, b) { return (b.n - a.n) || (b.last - a.last); });
+    return groups.slice(0, maxN).map(function (g) { return { price: g.avg, touches: g.n }; });
   }
 
   function makeChart(el, intraday, showTimeAxis) {
@@ -457,9 +617,9 @@
     var legend = document.getElementById("chart-legend-items");
     if (!legend) return;
     legend.innerHTML = IND_META.filter(function (m) {
-      return indicators[m.key] && m.color && m.key !== "rsi" && m.key !== "macd";
+      return indicators[m.key] && m.color && ["rsi", "macd", "stoch"].indexOf(m.key) < 0;
     }).map(function (m) {
-      return '<span style="color:' + m.color + '">— ' + m.label + "</span>";
+      return '<span style="color:' + m.color + '">— ' + indLabel(m.key) + "</span>";
     }).join(" ");
   }
 
@@ -469,26 +629,32 @@
     var series = view.series;
     var mainEl = document.getElementById("lookup-chart");
     var rsiEl = document.getElementById("rsi-pane");
+    var stochEl = document.getElementById("stoch-pane");
     var macdEl = document.getElementById("macd-pane");
     if (!mainEl) return false;
     mainEl.innerHTML = "";
     if (rsiEl) { rsiEl.innerHTML = ""; rsiEl.style.display = indicators.rsi ? "" : "none"; }
+    if (stochEl) { stochEl.innerHTML = ""; stochEl.style.display = indicators.stoch ? "" : "none"; }
     if (macdEl) { macdEl.innerHTML = ""; macdEl.style.display = indicators.macd ? "" : "none"; }
 
     var gain = cssVar("--gain") || "#1a7f4b";
     var loss = cssVar("--loss") || "#c0392b";
     var hasOhlc = series.length && typeof series[0].o === "number";
-    var bottomPane = indicators.macd && macdEl ? "macd" : indicators.rsi && rsiEl ? "rsi" : "main";
+    var bottomPane =
+      indicators.macd && macdEl ? "macd" :
+      indicators.stoch && stochEl ? "stoch" :
+      indicators.rsi && rsiEl ? "rsi" : "main";
 
     mainChart = makeChart(mainEl, view.intraday, bottomPane === "main");
 
+    var priceSeries;
     if (hasOhlc) {
-      var candles = mainChart.addCandlestickSeries({
+      priceSeries = mainChart.addCandlestickSeries({
         upColor: gain, downColor: loss,
         borderUpColor: gain, borderDownColor: loss,
         wickUpColor: gain, wickDownColor: loss,
       });
-      candles.setData(series.map(function (p) {
+      priceSeries.setData(series.map(function (p) {
         return { time: p.time, open: p.o, high: p.h, low: p.l, close: p.c };
       }));
       if (indicators.vol) {
@@ -504,9 +670,8 @@
         }));
       }
     } else {
-      mainChart.addLineSeries({ color: gain, lineWidth: 2 }).setData(
-        series.map(function (p) { return { time: p.time, value: p.c }; })
-      );
+      priceSeries = mainChart.addLineSeries({ color: gain, lineWidth: 2 });
+      priceSeries.setData(series.map(function (p) { return { time: p.time, value: p.c }; }));
     }
 
     var overlayLine = function (data, color, width, style) {
@@ -518,33 +683,74 @@
         crosshairMarkerVisible: false,
       }).setData(data);
     };
-    if (indicators.sma20 && series.length >= 20) overlayLine(smaSeriesArr(series, 20), "#e6a23c");
-    if (indicators.sma50 && series.length >= 50) overlayLine(smaSeriesArr(series, 50), "#5b8def");
-    if (indicators.sma200 && series.length >= 200) overlayLine(smaSeriesArr(series, 200), "#b06fd8");
-    if (indicators.ema20 && series.length >= 20) overlayLine(emaSeriesArr(series, 20), "#2aa9a9");
-    if (indicators.bb && series.length >= 20) {
-      var bb = bbSeriesArr(series, 20, 2);
+    if (indicators.sma20 && series.length >= params.sma1) overlayLine(smaSeriesArr(series, params.sma1), "#e6a23c");
+    if (indicators.sma50 && series.length >= params.sma2) overlayLine(smaSeriesArr(series, params.sma2), "#5b8def");
+    if (indicators.sma200 && series.length >= params.sma3) overlayLine(smaSeriesArr(series, params.sma3), "#b06fd8");
+    if (indicators.ema20 && series.length >= params.ema) overlayLine(emaSeriesArr(series, params.ema), "#2aa9a9");
+    if (indicators.bb && series.length >= params.bbP) {
+      var bb = bbSeriesArr(series, params.bbP, params.bbK);
       overlayLine(bb.up, "#9a9aa2", 1, 2);
       overlayLine(bb.mid, "#9a9aa2", 1, 0);
       overlayLine(bb.lo, "#9a9aa2", 1, 2);
     }
+    if (indicators.ichi) {
+      var ichi = ichimokuArr(series, params.ichiT, params.ichiK, params.ichiB);
+      if (ichi) {
+        overlayLine(ichi.spanA, "#1a7f4b", 1);
+        overlayLine(ichi.spanB, "#b06fd8", 1);
+        overlayLine(ichi.tenkan, "#e6a23c", 1);
+        overlayLine(ichi.kijun, "#c0392b", 1);
+        overlayLine(ichi.chikou, "#9a9aa2", 1, 2);
+      }
+    }
+    if (indicators.sr) {
+      srLevelsArr(series, params.srWin, params.srMax).forEach(function (lvl) {
+        priceSeries.createPriceLine({
+          price: lvl.price,
+          color: "#c9a227",
+          lineWidth: 1,
+          lineStyle: 2,
+          axisLabelVisible: true,
+          title: "S/R",
+        });
+      });
+    }
 
-    if (indicators.rsi && rsiEl && series.length >= 15) {
+    if (indicators.rsi && rsiEl && series.length >= params.rsi + 1) {
       var rsiChart = makeChart(rsiEl, view.intraday, bottomPane === "rsi");
       var rsiLine = rsiChart.addLineSeries({
         color: "#e6a23c", lineWidth: 1.5,
         priceLineVisible: false, lastValueVisible: true,
       });
-      rsiLine.setData(rsiSeriesArr(series, 14));
+      rsiLine.setData(rsiSeriesArr(series, params.rsi));
       [70, 30].forEach(function (lvl) {
         rsiLine.createPriceLine({ price: lvl, color: cssVar("--fg-muted"), lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
       });
-      rsiChart.priceScale("right").applyOptions({ autoScale: false });
       rsiLine.applyOptions({ autoscaleInfoProvider: function () { return { priceRange: { minValue: 0, maxValue: 100 } }; } });
     }
 
+    if (indicators.stoch && stochEl) {
+      var stoch = stochSeriesArr(series, params.stochK, params.stochKS, params.stochD);
+      if (stoch) {
+        var stochChart = makeChart(stochEl, view.intraday, bottomPane === "stoch");
+        var kLine = stochChart.addLineSeries({
+          color: "#2aa9a9", lineWidth: 1.5,
+          priceLineVisible: false, lastValueVisible: true,
+        });
+        kLine.setData(stoch.k);
+        stochChart.addLineSeries({
+          color: "#c0392b", lineWidth: 1,
+          priceLineVisible: false, lastValueVisible: false,
+        }).setData(stoch.d);
+        [80, 20].forEach(function (lvl) {
+          kLine.createPriceLine({ price: lvl, color: cssVar("--fg-muted"), lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
+        });
+        kLine.applyOptions({ autoscaleInfoProvider: function () { return { priceRange: { minValue: 0, maxValue: 100 } }; } });
+      }
+    }
+
     if (indicators.macd && macdEl) {
-      var macdData = macdSeriesArr(series, gain, loss);
+      var macdData = macdSeriesArr(series, gain, loss, params.macdF, params.macdS, params.macdSig);
       if (macdData) {
         var macdChart = makeChart(macdEl, view.intraday, bottomPane === "macd");
         macdChart.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false }).setData(macdData.hist);
@@ -970,11 +1176,25 @@
       '<div class="range-bar ind-bar" role="group" aria-label="Chỉ báo">' +
       IND_META.map(function (m) {
         return '<button type="button" class="range-btn ind-btn' + (indicators[m.key] ? " active" : "") +
-          '" data-ind="' + m.key + '">' + m.label + "</button>";
-      }).join("") + "</div>" +
+          '" data-ind="' + m.key + '">' + indLabel(m.key) + "</button>";
+      }).join("") +
+      '<button type="button" class="range-btn" id="ind-gear" title="Cài đặt thông số chỉ báo">⚙</button></div>' +
+      '<div id="ind-settings" class="ind-settings" hidden>' +
+      SETTING_GROUPS.map(function (g) {
+        return '<div class="set-row"><span class="set-label">' + g.label + "</span>" +
+          g.keys.map(function (k) {
+            return '<input type="number" min="1" max="500" step="' + (k === "bbK" ? "0.5" : "1") +
+              '" data-param="' + k + '" value="' + params[k] + '" aria-label="' + k + '">';
+          }).join("") + "</div>";
+      }).join("") +
+      '<div class="set-row set-actions"><button type="button" id="set-apply" class="range-btn active">Áp dụng</button>' +
+      '<button type="button" id="set-reset" class="range-btn">Mặc định</button>' +
+      '<span class="lookup-name">Thông số chỉ áp dụng cho biểu đồ; bài phân tích bên dưới dùng bộ tham số chuẩn.</span></div>' +
+      "</div>" +
       '<div id="chart-wrap" class="chart-wrap">' +
       '<div id="lookup-chart" class="lookup-chart"></div>' +
       '<div id="rsi-pane" class="lookup-subchart"></div>' +
+      '<div id="stoch-pane" class="lookup-subchart"></div>' +
       '<div id="macd-pane" class="lookup-subchart"></div>' +
       "</div>" +
       '<p class="chart-legend"><span id="chart-legend-items"></span> <span id="chart-note"></span></p>' +
@@ -1037,6 +1257,35 @@
         drawCharts();
       });
     });
+
+    var refreshChipLabels = function () {
+      Array.prototype.forEach.call(result.querySelectorAll(".ind-btn"), function (b) {
+        b.textContent = indLabel(b.getAttribute("data-ind"));
+      });
+    };
+    var gear = document.getElementById("ind-gear");
+    var panel = document.getElementById("ind-settings");
+    if (gear && panel) {
+      gear.addEventListener("click", function () { panel.hidden = !panel.hidden; });
+      document.getElementById("set-apply").addEventListener("click", function () {
+        Array.prototype.forEach.call(panel.querySelectorAll("input[data-param]"), function (inp) {
+          var v = Number(inp.value);
+          if (isFinite(v) && v > 0) params[inp.getAttribute("data-param")] = v;
+        });
+        saveParams();
+        refreshChipLabels();
+        drawCharts();
+      });
+      document.getElementById("set-reset").addEventListener("click", function () {
+        for (var k in PARAM_DEFAULTS) params[k] = PARAM_DEFAULTS[k];
+        saveParams();
+        Array.prototype.forEach.call(panel.querySelectorAll("input[data-param]"), function (inp) {
+          inp.value = params[inp.getAttribute("data-param")];
+        });
+        refreshChipLabels();
+        drawCharts();
+      });
+    }
 
     var fsBtn = document.getElementById("fs-btn");
     var wrap = document.getElementById("chart-wrap");

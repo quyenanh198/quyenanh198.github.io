@@ -421,6 +421,39 @@ button.lookup-chip:hover {
   margin: 4px 0 2px;
 }
 
+.lookup-subchart {
+  width: 100%;
+  height: 110px;
+  margin: 2px 0;
+}
+
+.ind-bar {
+  margin-top: 2px;
+}
+
+.ind-bar .range-btn {
+  font-weight: 500;
+  font-size: 0.78em;
+}
+
+.chart-wrap:fullscreen {
+  background: var(--bg);
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-wrap:fullscreen .lookup-chart {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+.chart-wrap:fullscreen .lookup-subchart {
+  height: 16vh;
+  flex: none;
+}
+
 .chart-legend {
   font-size: 0.78em;
   color: var(--fg-muted);

@@ -276,90 +276,170 @@
     });
   }
 
-  // ---- Chart ----
+  // ---- Chart engine: main pane + optional RSI/MACD panes, toggleable
+  // indicators, synced time scales, fullscreen support ----
 
-  var chart = null;
+  var charts = [];
+  var mainChart = null;
+  var view = { series: null, intraday: false, rangeLabel: DEFAULT_LABEL };
+  var IND_DEFAULTS = { sma20: true, sma50: true, sma200: false, ema20: false, bb: false, vol: true, rsi: false, macd: false };
+  var IND_META = [
+    { key: "sma20", label: "SMA20", color: "#e6a23c" },
+    { key: "sma50", label: "SMA50", color: "#5b8def" },
+    { key: "sma200", label: "SMA200", color: "#b06fd8" },
+    { key: "ema20", label: "EMA20", color: "#2aa9a9" },
+    { key: "bb", label: "BB(20,2)", color: "#9a9aa2" },
+    { key: "vol", label: "Volume", color: "" },
+    { key: "rsi", label: "RSI", color: "#e6a23c" },
+    { key: "macd", label: "MACD", color: "#5b8def" },
+  ];
+  var indicators = (function () {
+    try {
+      var s = localStorage.getItem("lookupIndicators");
+      if (s) {
+        var parsed = JSON.parse(s);
+        var out = {};
+        for (var k in IND_DEFAULTS) out[k] = typeof parsed[k] === "boolean" ? parsed[k] : IND_DEFAULTS[k];
+        return out;
+      }
+    } catch (e) { /* ignore */ }
+    var copy = {};
+    for (var k2 in IND_DEFAULTS) copy[k2] = IND_DEFAULTS[k2];
+    return copy;
+  })();
+
+  function saveIndicators() {
+    try { localStorage.setItem("lookupIndicators", JSON.stringify(indicators)); } catch (e) { /* ignore */ }
+  }
 
   function cssVar(name) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   }
 
-  function destroyChart() {
-    if (chart) {
-      try { chart.remove(); } catch (e) { /* already disposed */ }
-      chart = null;
-    }
+  function destroyCharts() {
+    charts.forEach(function (c) { try { c.remove(); } catch (e) { /* disposed */ } });
+    charts = [];
+    mainChart = null;
+  }
+  var destroyChart = destroyCharts; // legacy alias
+
+  // Rolling indicator series aligned to candle times. Pane series are padded
+  // with whitespace points so logical bar indices match the main chart.
+  function emaSeriesArr(candles, n) {
+    var vals = emaArr(candles.map(function (p) { return p.c; }), n);
+    var out = [];
+    for (var i = 0; i < vals.length; i++) out.push({ time: candles[i + n - 1].time, value: vals[i] });
+    return out;
   }
 
-  function renderChart(el, series, intraday) {
-    if (!window.LightweightCharts) return false;
-    destroyChart();
-    el.innerHTML = "";
-    var hasOhlc = series.length && typeof series[0].o === "number";
-    var gain = cssVar("--gain") || "#1a7f4b";
-    var loss = cssVar("--loss") || "#c0392b";
+  function bbSeriesArr(candles, n, k) {
+    var mid = [], up = [], lo = [], sum = 0, sumSq = 0;
+    for (var i = 0; i < candles.length; i++) {
+      var c = candles[i].c;
+      sum += c; sumSq += c * c;
+      if (i >= n) { var d = candles[i - n].c; sum -= d; sumSq -= d * d; }
+      if (i >= n - 1) {
+        var m = sum / n;
+        var sd = Math.sqrt(Math.max(0, sumSq / n - m * m));
+        mid.push({ time: candles[i].time, value: m });
+        up.push({ time: candles[i].time, value: m + k * sd });
+        lo.push({ time: candles[i].time, value: m - k * sd });
+      }
+    }
+    return { mid: mid, up: up, lo: lo };
+  }
+
+  function rsiSeriesArr(candles, n) {
+    if (candles.length < n + 1) return [];
+    var out = [], gain = 0, loss = 0, i, d;
+    for (i = 0; i < n; i++) out.push({ time: candles[i].time });
+    for (i = 1; i <= n; i++) {
+      d = candles[i].c - candles[i - 1].c;
+      if (d > 0) gain += d; else loss -= d;
+    }
+    gain /= n; loss /= n;
+    out.push({ time: candles[n].time, value: loss === 0 ? 100 : 100 - 100 / (1 + gain / loss) });
+    for (i = n + 1; i < candles.length; i++) {
+      d = candles[i].c - candles[i - 1].c;
+      gain = (gain * (n - 1) + Math.max(d, 0)) / n;
+      loss = (loss * (n - 1) + Math.max(-d, 0)) / n;
+      out.push({ time: candles[i].time, value: loss === 0 ? 100 : 100 - 100 / (1 + gain / loss) });
+    }
+    return out;
+  }
+
+  function macdSeriesArr(candles, gainC, lossC) {
+    var closes = candles.map(function (p) { return p.c; });
+    if (closes.length < 36) return null;
+    var f = emaArr(closes, 12), s = emaArr(closes, 26);
+    var line = [];
+    for (var i = 0; i < s.length; i++) line.push(f[i + 14] - s[i]);
+    var sig = emaArr(line, 9);
+    var out = { line: [], signal: [], hist: [] };
+    var startIdx = 33; // first candle with a signal value (25 + 8)
+    for (var w = 0; w < startIdx; w++) {
+      out.line.push({ time: candles[w].time });
+      out.signal.push({ time: candles[w].time });
+      out.hist.push({ time: candles[w].time });
+    }
+    for (var j = 0; j < sig.length; j++) {
+      var t = candles[startIdx + j].time;
+      var h = line[j + 8] - sig[j];
+      out.line.push({ time: t, value: line[j + 8] });
+      out.signal.push({ time: t, value: sig[j] });
+      out.hist.push({ time: t, value: h, color: h >= 0 ? gainC + "88" : lossC + "88" });
+    }
+    return out;
+  }
+
+  function makeChart(el, intraday, showTimeAxis) {
     var text = cssVar("--fg-muted") || "#6b6b6b";
     var border = cssVar("--border") || "#e6e6e2";
-
-    chart = LightweightCharts.createChart(el, {
+    var chart = LightweightCharts.createChart(el, {
       autoSize: true,
       layout: {
         background: { type: "solid", color: "transparent" },
         textColor: text,
         fontFamily: getComputedStyle(document.body).fontFamily,
       },
-      grid: {
-        vertLines: { color: border },
-        horzLines: { color: border },
-      },
-      rightPriceScale: { borderColor: border },
+      grid: { vertLines: { color: border }, horzLines: { color: border } },
+      rightPriceScale: { borderColor: border, minimumWidth: 64 },
       timeScale: {
         borderColor: border,
         rightOffset: 3,
+        visible: !!showTimeAxis,
         timeVisible: !!intraday,
         secondsVisible: false,
       },
       crosshair: { mode: 0 },
     });
-
-    if (hasOhlc) {
-      var candles = chart.addCandlestickSeries({
-        upColor: gain, downColor: loss,
-        borderUpColor: gain, borderDownColor: loss,
-        wickUpColor: gain, wickDownColor: loss,
-      });
-      candles.setData(series.map(function (p) {
-        return { time: p.time, open: p.o, high: p.h, low: p.l, close: p.c };
-      }));
-      var volume = chart.addHistogramSeries({
-        priceFormat: { type: "volume" },
-        priceScaleId: "",
-        lastValueVisible: false,
-        priceLineVisible: false,
-      });
-      volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
-      volume.setData(series.map(function (p) {
-        return { time: p.time, value: p.v || 0, color: p.c >= p.o ? gain + "55" : loss + "55" };
-      }));
-    } else {
-      var line = chart.addLineSeries({ color: gain, lineWidth: 2 });
-      line.setData(series.map(function (p) { return { time: p.time, value: p.c }; }));
-    }
-
-    [{ n: 20, color: "#e6a23c" }, { n: 50, color: "#5b8def" }].forEach(function (m) {
-      if (series.length >= m.n) {
-        chart.addLineSeries({
-          color: m.color, lineWidth: 1,
-          priceLineVisible: false, lastValueVisible: false,
-          crosshairMarkerVisible: false,
-        }).setData(smaSeriesArr(series, m.n));
-      }
-    });
-    return true;
+    charts.push(chart);
+    return chart;
   }
 
-  function setDailyRange(series, r) {
-    if (!chart || !series.length) return;
+  function syncTimeScales() {
+    var syncing = false;
+    charts.forEach(function (src) {
+      src.timeScale().subscribeVisibleLogicalRangeChange(function (range) {
+        if (syncing || !range) return;
+        syncing = true;
+        charts.forEach(function (dst) {
+          if (dst !== src) dst.timeScale().setVisibleLogicalRange(range);
+        });
+        syncing = false;
+      });
+    });
+  }
+
+  function applyRange() {
+    if (!mainChart || !view.series || !view.series.length) return;
+    if (view.intraday) {
+      mainChart.timeScale().fitContent();
+      return;
+    }
+    var r = RANGES.filter(function (x) { return x.label === view.rangeLabel; })[0];
+    if (!r || r.interval !== "1d") { mainChart.timeScale().fitContent(); return; }
+    var series = view.series;
     var last = series[series.length - 1].d;
     var fromStr;
     if (r.ytd) {
@@ -370,10 +450,113 @@
       fromStr = from.toISOString().slice(0, 10);
     }
     var first = series[0].d;
-    chart.timeScale().setVisibleRange({
-      from: fromStr > first ? fromStr : first,
-      to: last,
-    });
+    mainChart.timeScale().setVisibleRange({ from: fromStr > first ? fromStr : first, to: last });
+  }
+
+  function updateLegend() {
+    var legend = document.getElementById("chart-legend-items");
+    if (!legend) return;
+    legend.innerHTML = IND_META.filter(function (m) {
+      return indicators[m.key] && m.color && m.key !== "rsi" && m.key !== "macd";
+    }).map(function (m) {
+      return '<span style="color:' + m.color + '">— ' + m.label + "</span>";
+    }).join(" ");
+  }
+
+  function drawCharts() {
+    if (!window.LightweightCharts || !view.series) return false;
+    destroyCharts();
+    var series = view.series;
+    var mainEl = document.getElementById("lookup-chart");
+    var rsiEl = document.getElementById("rsi-pane");
+    var macdEl = document.getElementById("macd-pane");
+    if (!mainEl) return false;
+    mainEl.innerHTML = "";
+    if (rsiEl) { rsiEl.innerHTML = ""; rsiEl.style.display = indicators.rsi ? "" : "none"; }
+    if (macdEl) { macdEl.innerHTML = ""; macdEl.style.display = indicators.macd ? "" : "none"; }
+
+    var gain = cssVar("--gain") || "#1a7f4b";
+    var loss = cssVar("--loss") || "#c0392b";
+    var hasOhlc = series.length && typeof series[0].o === "number";
+    var bottomPane = indicators.macd && macdEl ? "macd" : indicators.rsi && rsiEl ? "rsi" : "main";
+
+    mainChart = makeChart(mainEl, view.intraday, bottomPane === "main");
+
+    if (hasOhlc) {
+      var candles = mainChart.addCandlestickSeries({
+        upColor: gain, downColor: loss,
+        borderUpColor: gain, borderDownColor: loss,
+        wickUpColor: gain, wickDownColor: loss,
+      });
+      candles.setData(series.map(function (p) {
+        return { time: p.time, open: p.o, high: p.h, low: p.l, close: p.c };
+      }));
+      if (indicators.vol) {
+        var volume = mainChart.addHistogramSeries({
+          priceFormat: { type: "volume" },
+          priceScaleId: "",
+          lastValueVisible: false,
+          priceLineVisible: false,
+        });
+        volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+        volume.setData(series.map(function (p) {
+          return { time: p.time, value: p.v || 0, color: p.c >= p.o ? gain + "55" : loss + "55" };
+        }));
+      }
+    } else {
+      mainChart.addLineSeries({ color: gain, lineWidth: 2 }).setData(
+        series.map(function (p) { return { time: p.time, value: p.c }; })
+      );
+    }
+
+    var overlayLine = function (data, color, width, style) {
+      if (!data || !data.length) return;
+      mainChart.addLineSeries({
+        color: color, lineWidth: width || 1,
+        lineStyle: style || 0,
+        priceLineVisible: false, lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      }).setData(data);
+    };
+    if (indicators.sma20 && series.length >= 20) overlayLine(smaSeriesArr(series, 20), "#e6a23c");
+    if (indicators.sma50 && series.length >= 50) overlayLine(smaSeriesArr(series, 50), "#5b8def");
+    if (indicators.sma200 && series.length >= 200) overlayLine(smaSeriesArr(series, 200), "#b06fd8");
+    if (indicators.ema20 && series.length >= 20) overlayLine(emaSeriesArr(series, 20), "#2aa9a9");
+    if (indicators.bb && series.length >= 20) {
+      var bb = bbSeriesArr(series, 20, 2);
+      overlayLine(bb.up, "#9a9aa2", 1, 2);
+      overlayLine(bb.mid, "#9a9aa2", 1, 0);
+      overlayLine(bb.lo, "#9a9aa2", 1, 2);
+    }
+
+    if (indicators.rsi && rsiEl && series.length >= 15) {
+      var rsiChart = makeChart(rsiEl, view.intraday, bottomPane === "rsi");
+      var rsiLine = rsiChart.addLineSeries({
+        color: "#e6a23c", lineWidth: 1.5,
+        priceLineVisible: false, lastValueVisible: true,
+      });
+      rsiLine.setData(rsiSeriesArr(series, 14));
+      [70, 30].forEach(function (lvl) {
+        rsiLine.createPriceLine({ price: lvl, color: cssVar("--fg-muted"), lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
+      });
+      rsiChart.priceScale("right").applyOptions({ autoScale: false });
+      rsiLine.applyOptions({ autoscaleInfoProvider: function () { return { priceRange: { minValue: 0, maxValue: 100 } }; } });
+    }
+
+    if (indicators.macd && macdEl) {
+      var macdData = macdSeriesArr(series, gain, loss);
+      if (macdData) {
+        var macdChart = makeChart(macdEl, view.intraday, bottomPane === "macd");
+        macdChart.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false }).setData(macdData.hist);
+        macdChart.addLineSeries({ color: "#5b8def", lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false }).setData(macdData.line);
+        macdChart.addLineSeries({ color: "#e6a23c", lineWidth: 1, priceLineVisible: false, lastValueVisible: false }).setData(macdData.signal);
+      }
+    }
+
+    syncTimeScales();
+    applyRange();
+    updateLegend();
+    return true;
   }
 
   // ---- Analysis ----
@@ -782,9 +965,19 @@
       '<div class="lookup-price"><strong>' + fmt.price(a.close) + "</strong> " + esc(data.currency) +
       ' <span class="' + dayCls + '">' + fmt.pct(a.pctDay) + "</span>" +
       ' <span class="lookup-date">phiên ' + fmt.date(a.date) + "</span></div>" +
-      '<div class="range-bar" role="group" aria-label="Khung thời gian">' + rangeButtons + "</div>" +
+      '<div class="range-bar" role="group" aria-label="Khung thời gian">' + rangeButtons +
+      '<button type="button" class="range-btn fs-btn" id="fs-btn" title="Toàn màn hình (Esc để thoát)">⛶</button></div>' +
+      '<div class="range-bar ind-bar" role="group" aria-label="Chỉ báo">' +
+      IND_META.map(function (m) {
+        return '<button type="button" class="range-btn ind-btn' + (indicators[m.key] ? " active" : "") +
+          '" data-ind="' + m.key + '">' + m.label + "</button>";
+      }).join("") + "</div>" +
+      '<div id="chart-wrap" class="chart-wrap">' +
       '<div id="lookup-chart" class="lookup-chart"></div>' +
-      '<p class="chart-legend"><span style="color:#e6a23c">— SMA20</span> <span style="color:#5b8def">— SMA50</span> <span id="chart-note"></span></p>' +
+      '<div id="rsi-pane" class="lookup-subchart"></div>' +
+      '<div id="macd-pane" class="lookup-subchart"></div>' +
+      "</div>" +
+      '<p class="chart-legend"><span id="chart-legend-items"></span> <span id="chart-note"></span></p>' +
       '<table class="lookup-table"><tbody>' +
       "<tr><th>1 tuần / 1 tháng</th><td><span class=\"" + (a.pct5 >= 0 ? "gain" : "loss") + '">' + fmt.pct(a.pct5) + "</span> / <span class=\"" + (a.pct21 >= 0 ? "gain" : "loss") + '">' + fmt.pct(a.pct21) + "</span></td></tr>" +
       "<tr><th>Biên độ 52 tuần</th><td>" + fmt.price(a.lo52) + " – " + fmt.price(a.hi52) + "</td></tr>" +
@@ -797,37 +990,35 @@
       "</div>";
     result.hidden = false;
 
-    var chartEl = document.getElementById("lookup-chart");
     var note = document.getElementById("chart-note");
-    var drawn = renderChart(chartEl, data.series, false);
-    if (!drawn) {
-      chartEl.innerHTML = '<p class="lookup-name">Không tải được thư viện biểu đồ — hiển thị số liệu dạng bảng bên dưới.</p>';
+    view = { series: data.series, intraday: false, rangeLabel: DEFAULT_LABEL };
+    if (!drawCharts()) {
+      document.getElementById("lookup-chart").innerHTML =
+        '<p class="lookup-name">Không tải được thư viện biểu đồ — hiển thị số liệu dạng bảng bên dưới.</p>';
       return;
     }
-    var def = RANGES.filter(function (r) { return r.label === DEFAULT_LABEL; })[0];
-    setDailyRange(data.series, def);
 
-    Array.prototype.forEach.call(result.querySelectorAll(".range-btn"), function (btn) {
+    Array.prototype.forEach.call(result.querySelectorAll(".range-btn[data-label]"), function (btn) {
       btn.addEventListener("click", function () {
         if (btn.disabled) return;
         var r = RANGES.filter(function (x) { return x.label === btn.getAttribute("data-label"); })[0];
         if (!r) return;
         var activate = function () {
-          Array.prototype.forEach.call(result.querySelectorAll(".range-btn"), function (b) {
+          Array.prototype.forEach.call(result.querySelectorAll(".range-btn[data-label]"), function (b) {
             b.classList.remove("active");
           });
           btn.classList.add("active");
         };
         if (r.interval === "1d") {
-          renderChart(chartEl, data.series, false);
-          setDailyRange(data.series, r);
+          view = { series: data.series, intraday: false, rangeLabel: r.label };
+          drawCharts();
           if (note) note.textContent = "";
           activate();
         } else {
           if (note) note.textContent = "Đang tải nến " + r.interval + "…";
           fetchYahoo(symbol, r.interval, r.range).then(function (intra) {
-            renderChart(chartEl, intra.series, true);
-            chart.timeScale().fitContent();
+            view = { series: intra.series, intraday: true, rangeLabel: r.label };
+            drawCharts();
             if (note) note.textContent = "Nến " + r.interval + " · " + r.label;
             activate();
           }).catch(function () {
@@ -836,6 +1027,27 @@
         }
       });
     });
+
+    Array.prototype.forEach.call(result.querySelectorAll(".ind-btn"), function (btn) {
+      btn.addEventListener("click", function () {
+        var key = btn.getAttribute("data-ind");
+        indicators[key] = !indicators[key];
+        saveIndicators();
+        btn.classList.toggle("active", indicators[key]);
+        drawCharts();
+      });
+    });
+
+    var fsBtn = document.getElementById("fs-btn");
+    var wrap = document.getElementById("chart-wrap");
+    if (fsBtn && wrap && wrap.requestFullscreen) {
+      fsBtn.addEventListener("click", function () {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else wrap.requestFullscreen();
+      });
+    } else if (fsBtn) {
+      fsBtn.style.display = "none";
+    }
   }
 
   function renderError(symbol) {

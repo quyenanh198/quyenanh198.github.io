@@ -180,11 +180,18 @@
     var key = symbol + "|" + interval + "|" + range;
     if (dataCache[key]) return Promise.resolve(dataCache[key]);
     var intraday = interval !== "1d";
-    var urls = [
+    // Preferred source: the site's own Cloudflare Worker proxy (see
+    // workers/README.md); public CORS proxies remain as fallbacks.
+    var proxy = (typeof window !== "undefined" && window.MARKET_PROXY ? String(window.MARKET_PROXY) : "").replace(/\/+$/, "");
+    var urls = [];
+    if (proxy) {
+      urls.push(proxy + "/chart?symbol=" + encodeURIComponent(symbol) + "&interval=" + interval + "&range=" + range);
+    }
+    urls.push(
       yahooUrl("query1", symbol, interval, range),
       "https://corsproxy.io/?url=" + encodeURIComponent(yahooUrl("query1", symbol, interval, range)),
-      "https://api.allorigins.win/raw?url=" + encodeURIComponent(yahooUrl("query2", symbol, interval, range)),
-    ];
+      "https://api.allorigins.win/raw?url=" + encodeURIComponent(yahooUrl("query2", symbol, interval, range))
+    );
     var attempt = function (idx) {
       if (idx >= urls.length) return Promise.reject(new Error("yahoo unreachable"));
       return fetchWithTimeout(urls[idx], 8000).then(function (res) {

@@ -1,0 +1,28 @@
+---
+layout: base.njk
+---
+<article class="post report">
+  <header class="post-header">
+    <p class="report-type-badge" data-type="{{ reportType }}">
+      {% if reportType == "ticker" %}Báo cáo ticker
+      {% elif reportType == "weekly" %}Thị trường tuần
+      {% elif reportType == "monthly" %}Thị trường tháng
+      {% elif reportType == "sector-flow" %}Dòng tiền ngành
+      {% else %}Báo cáo{% endif %}
+    </p>
+    <h1>{{ title }}</h1>
+    <p class="post-meta">
+      <time datetime="{{ date | htmlDateString }}">{{ date | readableDate }}</time>
+      · {{ content | readingTime }}
+      {% if tickers %}
+      · {% for t in tickers %}<span class="ticker-tag">{{ t }}</span>{% endfor %}
+      {% endif %}
+    </p>
+  </header>
+  <div class="prose">
+    {{ content | safe }}
+  </div>
+  <footer class="report-disclaimer">
+    <p>Báo cáo được tạo tự động từ dữ liệu thị trường, chỉ nhằm mục đích thông tin — không phải khuyến nghị đầu tư.</p>
+  </footer>
+</article>

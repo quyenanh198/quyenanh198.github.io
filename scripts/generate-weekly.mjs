@@ -24,12 +24,14 @@ const symbols = [
 ];
 const stats = {};
 const tech = {};
+const rowsBySymbol = {};
 for (const symbol of symbols) {
   const rows = await fetchDaily(symbol, { today });
   const st = rows && weeklyStats(rows, today);
   if (st) {
     stats[symbol] = st;
     tech[symbol] = technicalStats(rows, today);
+    rowsBySymbol[symbol] = rows;
   } else console.warn(`[weekly] skipping ${symbol}: no usable data`);
 }
 
@@ -380,6 +382,29 @@ ${outflows.length ? `- **${outflows[0].symbol}**: đang bị rút tiền chủ �
 `;
   await writeFile(`${POSTS_DIR}/${reportDate}-phan-tich-thi-truong-tuan.md`, body);
   console.log(`[weekly] wrote post ${reportDate}-phan-tich-thi-truong-tuan.md`);
+}
+
+// ---- 5. Snapshot dataset for the instant-lookup page (/lookup/) ----
+// Serves as offline fallback when the browser cannot reach live quote APIs.
+{
+  const names = Object.fromEntries(
+    [...watchlist.benchmarks, ...watchlist.sectors, ...watchlist.tickers].map((x) => [x.symbol, x.name])
+  );
+  const snapshot = {
+    updated: reportDate,
+    symbols: Object.fromEntries(
+      Object.entries(rowsBySymbol).map(([symbol, rows]) => [
+        symbol,
+        {
+          name: names[symbol] ?? symbol,
+          series: rows.slice(-130).map((r) => ({ d: r.date, c: +r.close.toFixed(4) })),
+        },
+      ])
+    ),
+  };
+  await mkdir("src/api", { recursive: true });
+  await writeFile("src/api/snapshot.json", JSON.stringify(snapshot));
+  console.log(`[weekly] wrote src/api/snapshot.json (${Object.keys(snapshot.symbols).length} symbols)`);
 }
 
 if (missing.length) console.warn(`[weekly] done with missing symbols: ${missing.join(", ")}`);

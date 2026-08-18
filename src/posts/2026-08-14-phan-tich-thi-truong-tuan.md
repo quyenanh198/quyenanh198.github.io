@@ -22,7 +22,7 @@ Kịch bản tuần tới: giữ trên hỗ trợ 715.50 (đáy tuần) thì c�
 
 ## Dòng tiền đang chảy về đâu?
 
-Xếp hạng 11 nhóm ngành tuần này cho thấy **Năng lượng** đứng đầu (+7.67%) và **Tiêu dùng không thiết yếu** đứng cuối (−1.38%); cơ cấu sức mạnh tương đối nghiêng về **phòng thủ**: Tiện ích / Tiêu dùng thiết yếu / Y tế mạnh hơn nhóm risk-on — một bộ phận dòng tiền đang hạ khẩu vị rủi ro. Câu chuyện dòng tiền tuần này nằm ở nhóm Bất động sản (XLRE): ngành này vừa vượt trội thị trường vừa có giá trị giao dịch từ mức trung bình trở lên — đặc điểm của dòng tiền tích lũy chủ động thay vì một nhịp bật kỹ thuật. Ngược lại, Vật liệu (XLB, −0.61%) giảm kèm giá trị giao dịch đáng kể — tiền đang chủ động rời nhóm này.
+Xếp hạng 11 nhóm ngành tuần này cho thấy **Năng lượng** đứng đầu (+7.67%) và **Tiêu dùng không thiết yếu** đứng cuối (−1.38%); cơ cấu sức mạnh tương đối nghiêng về **phòng thủ**: Tiện ích / Tiêu dùng thiết yếu / Y tế mạnh hơn nhóm risk-on — một bộ phận dòng tiền đang hạ khẩu vị rủi ro. Tuần này không có ngành nào hút tiền một cách thuyết phục — Năng lượng dẫn đầu về giá (+7.67%) nhưng thanh khoản chỉ đạt 0.86× trung bình, nên chưa thể gọi đây là một cuộc luân chuyển thực sự. Ngược lại, Vật liệu (XLB, −0.61%) giảm kèm giá trị giao dịch đáng kể — tiền đang chủ động rời nhóm này.
 
 Về mặt kỹ thuật, XLE hiện ở **xu hướng tăng** — giá trên SMA20 (59.16) và SMA20 trên SMA50 (56.97), đồng pha với xu hướng dài hạn trên SMA200; RSI(14) ở 67 — động lượng tích cực; MACD trên đường tín hiệu với histogram mở rộng — lực tăng còn khỏe. Nhà đầu tư muốn đi theo nhịp luân chuyển này nên chờ điểm vào hợp lý thay vì mua đuổi: nhịp điều chỉnh về 59.16–60.42 (quanh SMA20), hoặc mua theo đà khi vượt 62.11 kèm khối lượng lớn.
 

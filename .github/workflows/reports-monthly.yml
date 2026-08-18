@@ -2,8 +2,9 @@ name: Monthly market report
 
 on:
   schedule:
-    # 01:30 UTC ngày 1 hằng tháng = 08:30 sáng giờ Việt Nam, báo cáo cho tháng vừa kết thúc
-    - cron: "30 1 1 * *"
+    # 15:30 UTC ngày 1 hằng tháng = 08:30 sáng giờ San Francisco (PDT; 07:30 vào mùa đông PST),
+    # báo cáo cho tháng vừa kết thúc
+    - cron: "30 15 1 * *"
   workflow_dispatch:
 
 permissions:

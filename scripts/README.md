@@ -21,10 +21,13 @@ GitHub Actions (cron)
 
 ## Lịch chạy
 
-| Workflow | Lịch (UTC / giờ VN) | Sản phẩm |
+| Workflow | Lịch (UTC / giờ San Francisco) | Sản phẩm |
 |---|---|---|
-| `reports-weekly.yml` | Thứ 7 01:00 UTC (08:00 VN) | Thị trường tuần + Dòng tiền ngành + Watchlist ticker + bài phân tích tuần (blog) |
-| `reports-monthly.yml` | Ngày 1 hằng tháng 01:30 UTC (08:30 VN) | Thị trường tháng + bài phân tích tháng (blog) |
+| `reports-weekly.yml` | Thứ 7 15:00 UTC (08:00 SF mùa hè) | Thị trường tuần + Dòng tiền ngành + Watchlist ticker + bài phân tích tuần (blog) |
+| `reports-monthly.yml` | Ngày 1 hằng tháng 15:30 UTC (08:30 SF mùa hè) | Thị trường tháng + bài phân tích tháng (blog) |
+
+Cron của GitHub chạy theo UTC cố định, nên vào mùa đông (PST) giờ địa phương sẽ sớm hơn 1 tiếng
+(07:00 / 07:30 sáng).
 
 Chạy tay bất cứ lúc nào: tab **Actions** trên GitHub → chọn workflow → **Run workflow**,
 hoặc local: `npm run reports:weekly` / `npm run reports:monthly`.

@@ -38,6 +38,22 @@ Tuần qua +4.17% (4 tuần: −10.13%), đóng tuần tại 342.27, cách đỉ
 - **Dừng lỗ**: dưới 283.50 (rủi ro ~17.2% từ giá hiện tại).
 - **Mục tiêu / vùng chốt lời**: 386.61 (dư địa ~13.0%).
 
+### SOXL — Direxion Daily Semiconductor Bull 3x
+
+Tuần qua +3.35% (4 tuần: +7.00%), đóng tuần tại 144.95, cách đỉnh 13 tuần −52.00%. Xu hướng: **đi ngang / hỗn hợp** — giá trên SMA20 (133.32) trong khi SMA50 (180.26) đi phẳng. Động lượng: RSI(14) trung tính quanh 49; MACD trên đường tín hiệu với histogram mở rộng — lực tăng còn khỏe. Biến động trung bình (ATR14) 20.48/phiên.
+
+- **Điểm mua tham khảo**: canh mua tại cận dưới biên tích lũy 91.50–111.98, ưu tiên khi RSI quay đầu hướng lên.
+- **Dừng lỗ**: dưới 71.02 (rủi ro ~51.0% từ giá hiện tại).
+- **Mục tiêu / vùng chốt lời**: 165.75 (dư địa ~14.3%).
+
+### TQQQ — ProShares UltraPro QQQ (3x NASDAQ-100)
+
+Tuần qua +3.12% (4 tuần: +13.71%), đóng tuần tại 76.79, cách đỉnh 13 tuần −12.83%. Xu hướng: **đi ngang / hỗn hợp** — giá trên SMA20 (69.39) trong khi SMA50 (73.30) đi phẳng. Động lượng: RSI(14) ở 58 — động lượng tích cực; MACD còn trên đường tín hiệu nhưng histogram đang thu hẹp — đà tăng chậm lại. Biến động trung bình (ATR14) 3.76/phiên.
+
+- **Điểm mua tham khảo**: canh mua tại cận dưới biên tích lũy 57.59–61.35, ưu tiên khi RSI quay đầu hướng lên.
+- **Dừng lỗ**: dưới 53.83 (rủi ro ~29.9% từ giá hiện tại).
+- **Mục tiêu / vùng chốt lời**: 77.85 (dư địa ~1.4%).
+
 ### NVDA — NVIDIA Corp.
 
 Tuần qua +0.54% (4 tuần: +11.02%), đóng tuần tại 225.16, cách đỉnh 13 tuần −3.07%. Xu hướng: **xu hướng tăng** — giá trên SMA20 (210.39) và SMA20 trên SMA50 (206.52), đồng pha với xu hướng dài hạn trên SMA200. Động lượng: RSI(14) ở 63 — động lượng tích cực; MACD còn trên đường tín hiệu nhưng histogram đang thu hẹp — đà tăng chậm lại. Biến động trung bình (ATR14) 6.94/phiên.

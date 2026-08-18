@@ -77,6 +77,76 @@
     return then ? (now / then - 1) * 100 : NaN;
   }
 
+  function emaArr(values, n) {
+    if (values.length < n) return [];
+    var k = 2 / (n + 1), out = [], sum = 0, i;
+    for (i = 0; i < n; i++) sum += values[i];
+    out.push(sum / n);
+    for (i = n; i < values.length; i++) out.push(values[i] * k + out[out.length - 1] * (1 - k));
+    return out;
+  }
+
+  function macdLast(closes) {
+    if (closes.length < 36) return null;
+    var f = emaArr(closes, 12), s = emaArr(closes, 26);
+    var line = [];
+    for (var i = 0; i < s.length; i++) line.push(f[i + 14] - s[i]);
+    var sig = emaArr(line, 9);
+    var hist = [];
+    for (var j = 0; j < sig.length; j++) hist.push(line[j + 8] - sig[j]);
+    return { hist: hist[hist.length - 1], prevHist: hist.length > 1 ? hist[hist.length - 2] : NaN };
+  }
+
+  // Wilder ATR from OHLC series; NaN when only closes are available.
+  function atrFromSeries(series, n) {
+    n = n || 14;
+    var rows = series.slice(-80);
+    if (rows.length < n + 1 || typeof rows[0].h !== "number") return NaN;
+    var trs = [], i;
+    for (i = 1; i < rows.length; i++) {
+      trs.push(Math.max(
+        rows[i].h - rows[i].l,
+        Math.abs(rows[i].h - rows[i - 1].c),
+        Math.abs(rows[i].l - rows[i - 1].c)
+      ));
+    }
+    var a = 0;
+    for (i = 0; i < n; i++) a += trs[i];
+    a /= n;
+    for (i = n; i < trs.length; i++) a = (a * (n - 1) + trs[i]) / n;
+    return a;
+  }
+
+  // Last close of each calendar week / month, for higher-timeframe views.
+  function closesPer(series, keyFn) {
+    var out = [], lastKey = null;
+    for (var i = 0; i < series.length; i++) {
+      var k = keyFn(series[i].d);
+      if (k !== lastKey) { out.push(series[i].c); lastKey = k; }
+      else out[out.length - 1] = series[i].c;
+    }
+    return out;
+  }
+
+  function weekKey(d) {
+    var dt = new Date(d + "T00:00:00Z");
+    dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7));
+    return dt.toISOString().slice(0, 10);
+  }
+
+  function monthKey(d) { return d.slice(0, 7); }
+
+  function tfState(closes, fast, slow) {
+    var st = { trend: null, rsi: NaN, macd: null };
+    if (closes.length >= slow) {
+      var c = closes[closes.length - 1], f = sma(closes, fast), s = sma(closes, slow);
+      st.trend = c > f && f > s ? "up" : c < f && f < s ? "down" : "side";
+    }
+    if (closes.length >= 15) st.rsi = rsi(closes, 14);
+    st.macd = macdLast(closes);
+    return st;
+  }
+
   // ---- Data sources ----
   // Normalized series item: { d, o, h, l, c, v } (o/h/l/v may be missing on
   // legacy snapshot data — the chart then falls back to a line series).
@@ -299,6 +369,129 @@
     return v + " — động lượng yếu";
   }
 
+  // ---- Multi-timeframe written analysis ----
+
+  var TREND_VN = { up: "Tăng", down: "Giảm", side: "Đi ngang" };
+
+  function macdVn(m) {
+    if (!m) return "n/a";
+    if (m.hist > 0) return m.hist >= m.prevHist ? "dương, mở rộng" : "dương, thu hẹp";
+    return m.hist <= m.prevHist ? "âm, mở rộng" : "âm, thu hẹp";
+  }
+
+  function buildAnalysis(symbol, data, a) {
+    var series = data.series;
+    var labels = { D: "Ngày", W: "Tuần", M: "Tháng" };
+    var tf = {
+      D: tfState(series.map(function (p) { return p.c; }), 20, 50),
+      W: tfState(closesPer(series, weekKey), 10, 30),
+      M: tfState(closesPer(series, monthKey), 6, 12),
+    };
+    var atr = atrFromSeries(series, 14);
+    if (!isFinite(atr)) atr = a.close * 0.02;
+    var atrPct = (atr / a.close) * 100;
+
+    var avail = ["D", "W", "M"].filter(function (k) { return tf[k].trend; });
+    var score = 0;
+    avail.forEach(function (k) {
+      score += tf[k].trend === "up" ? 1 : tf[k].trend === "side" ? 0.5 : 0;
+    });
+    var ratio = avail.length ? score / avail.length : 0;
+    var extended = a.close > a.sma20 + 2 * atr;
+    var overbought = a.rsi14 >= 70;
+
+    var vClass, verdict;
+    if (avail.length < 2) {
+      vClass = "neutral";
+      verdict = "Chưa đủ dữ liệu lịch sử để so sánh nhiều khung thời gian — nhận định dưới đây chỉ dựa trên khung ngày.";
+    } else if (ratio >= 0.8) {
+      if (overbought || extended) {
+        vClass = "wait";
+        verdict = "Xu hướng đồng thuận tăng trên các khung thời gian, nhưng giá đang căng" +
+          (overbought ? " (RSI quá mua)" : " (cách xa SMA20 hơn 2×ATR)") +
+          " — NÊN CHỜ nhịp điều chỉnh thay vì mua đuổi tại đây.";
+      } else {
+        vClass = "good";
+        verdict = "Các khung thời gian đồng thuận tăng và giá chưa quá căng so với trung bình — đây là ĐIỂM VÀO TƯƠNG ĐỐI THUẬN LỢI nếu tuân thủ dừng lỗ.";
+      }
+    } else if (ratio >= 0.5) {
+      vClass = "neutral";
+      verdict = "Các khung thời gian chưa đồng thuận (xu hướng lớn và ngắn hạn lệch nhau) — TRUNG LẬP, vị thế mới nên chờ tín hiệu xác nhận.";
+    } else if (tf.D.trend === "down" && (tf.W.trend === "up" || tf.M.trend === "up")) {
+      vClass = "wait";
+      verdict = "Khung ngày đang điều chỉnh trong khi xu hướng lớn (tuần/tháng) còn tăng — nhịp chỉnh trong uptrend: theo dõi vùng hỗ trợ, CHƯA VỘI bắt đáy cho tới khi có tín hiệu đảo chiều ngắn hạn.";
+    } else {
+      vClass = "risky";
+      verdict = "Đa số khung thời gian nghiêng giảm — mở vị thế mua lúc này RỦI RO CAO; đứng ngoài hoặc chờ cấu trúc giá cải thiện.";
+    }
+
+    var tfRows = ["D", "W", "M"].map(function (k) {
+      var t = tf[k];
+      return "<tr><th>" + labels[k] + "</th><td>" +
+        (t.trend ? TREND_VN[t.trend] : "Thiếu dữ liệu") + "</td><td>" +
+        (isFinite(t.rsi) ? t.rsi.toFixed(0) : "n/a") + "</td><td>" +
+        macdVn(t.macd) + "</td></tr>";
+    }).join("");
+
+    var reasons = [];
+    avail.forEach(function (k) {
+      var t = tf[k];
+      reasons.push("Khung " + labels[k].toLowerCase() + ": xu hướng " + TREND_VN[t.trend].toLowerCase() +
+        (isFinite(t.rsi) ? ", RSI " + t.rsi.toFixed(0) : "") +
+        (t.macd ? ", MACD " + macdVn(t.macd) : "") + ".");
+    });
+    reasons.push("Giá cách đỉnh 52 tuần " + fmt.pct(pctChange(a.close, a.hi52)) +
+      "; hỗ trợ/kháng cự 20 phiên gần nhất: " + fmt.price(a.support) + " / " + fmt.price(a.resist) + ".");
+    if (atrPct >= 4) {
+      reasons.push("Biến động rất cao (ATR ≈ " + atrPct.toFixed(1) +
+        "%/phiên) — biên độ dao động lớn, chỉ phù hợp tỷ trọng nhỏ hoặc giao dịch ngắn hạn.");
+    }
+
+    var planHtml = "";
+    if (vClass === "risky") {
+      planHtml = "<p><strong>Kế hoạch tham khảo:</strong> chưa có điểm mua thuận xu hướng. Điều kiện để xem xét lại: giá đóng cửa vượt và giữ trên SMA20 (" +
+        fmt.price(a.sma20) + "), sau đó là SMA50 (" + fmt.price(a.sma50) + "). Nếu đang nắm giữ, các nhịp hồi về SMA20 là vùng cân nhắc hạ tỷ trọng.</p>";
+    } else if (tf.D.trend === "down") {
+      planHtml = "<p><strong>Kế hoạch tham khảo:</strong> chờ khung ngày lấy lại SMA20 (" + fmt.price(a.sma20) +
+        ") kèm khối lượng cải thiện trước khi vào lệnh; vùng hỗ trợ cần giữ là " + fmt.price(a.support) + ".</p>";
+    } else {
+      var entryLo, entryHi, stop, target;
+      if (tf.D.trend === "up") {
+        entryLo = a.sma20; entryHi = a.sma20 + atr;
+        stop = Math.min(a.support, a.sma20 - atr);
+        target = a.close >= a.resist * 0.99 ? a.close + 2 * atr : a.resist;
+      } else {
+        entryLo = a.support; entryHi = a.support + atr;
+        stop = a.support - atr;
+        target = a.resist;
+      }
+      var mid = (entryLo + entryHi) / 2;
+      var risk = mid - stop, reward = target - mid;
+      var rr = risk > 0 && reward > 0 ? (reward / risk).toFixed(1) : null;
+      planHtml = "<p><strong>Kế hoạch tham khảo:</strong></p><ul>" +
+        "<li>Vùng mua: " + fmt.price(entryLo) + " – " + fmt.price(entryHi) +
+        (tf.D.trend === "up" ? " (nhịp điều chỉnh về SMA20)" : " (cận dưới biên tích lũy)") +
+        (overbought ? "; tránh mua đuổi khi RSI đang quá mua" : "") + ".</li>" +
+        "<li>Dừng lỗ: dưới " + fmt.price(stop) + " (rủi ro ~" + (((mid - stop) / mid) * 100).toFixed(1) + "% từ vùng mua).</li>" +
+        "<li>Mục tiêu gần: " + fmt.price(target) + " (dư địa ~" + ((reward / mid) * 100).toFixed(1) + "%)" +
+        (rr ? " — tỷ lệ lời:lỗ ≈ " + rr + ":1" + (Number(rr) < 1.5 ? ", khá mỏng: cân nhắc chờ vùng mua tốt hơn" : "") : "") + ".</li></ul>";
+    }
+
+    var invalid = "<p><strong>Kịch bản vô hiệu hóa nhận định:</strong> giá đóng tuần " +
+      (vClass === "risky"
+        ? "vượt " + fmt.price(a.resist) + " kèm khối lượng lớn sẽ phủ nhận kịch bản giảm."
+        : "thủng " + fmt.price(a.support) + " (hỗ trợ 20 phiên) sẽ phủ nhận kịch bản tích cực — khi đó ưu tiên bảo toàn vốn.") + "</p>";
+
+    return '<div class="lookup-analysis">' +
+      "<h2>Phân tích chi tiết " + esc(symbol) + "</h2>" +
+      '<table class="lookup-table"><thead><tr><th>Khung</th><th>Xu hướng</th><th>RSI(14)</th><th>MACD</th></tr></thead><tbody>' +
+      tfRows + "</tbody></table>" +
+      '<p class="verdict ' + vClass + '">' + verdict + "</p>" +
+      "<ul>" + reasons.map(function (r) { return "<li>" + r + "</li>"; }).join("") + "</ul>" +
+      planHtml + invalid +
+      "</div>";
+  }
+
   function render(symbol, data) {
     destroyChart();
     var a = analyze(data);
@@ -326,6 +519,7 @@
       "<tr><th>RSI(14)</th><td>" + rsiLabel(a.rsi14) + "</td></tr>" +
       "</tbody></table>" +
       '<p class="lookup-trend ' + t.cls + '">' + t.text + "</p>" +
+      buildAnalysis(symbol, data, a) +
       '<p class="lookup-source">Nguồn: ' + esc(data.source) + "</p>" +
       "</div>";
     result.hidden = false;

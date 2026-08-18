@@ -26,15 +26,15 @@ Số liệu tuần giao dịch 10–14/08/2026. "Từ đỉnh 13 tuần" = kho�
 
 ### TSLA — Tesla Inc.
 
-TSLA tăng mạnh nhất tuần trong nhóm theo dõi với mức +4.17% (4 tuần: −10.13%), vẫn cách xa đỉnh 13 tuần (−23.19%). Giá trị giao dịch quanh mức trung bình 4 tuần. Vùng giá đáng chú ý: hỗ trợ 323.64 (đáy tuần), kháng cự 351.26 (đỉnh tuần). Xu hướng: **đi ngang / hỗn hợp** — giá trên SMA20 (329.14) trong khi SMA50 (371.09) đi phẳng. Động lượng: RSI(14) trung tính quanh 49; MACD trên đường tín hiệu với histogram mở rộng — lực tăng còn khỏe. Biến động trung bình (ATR14) 13.88/phiên.
+TSLA tăng mạnh trong tuần với mức +4.17% (4 tuần: −10.13%), vẫn cách xa đỉnh 13 tuần (−23.19%). Giá trị giao dịch quanh mức trung bình 4 tuần. Vùng giá đáng chú ý: hỗ trợ 323.64 (đáy tuần), kháng cự 351.26 (đỉnh tuần). Xu hướng: **đi ngang / hỗn hợp** — giá trên SMA20 (329.14) trong khi SMA50 (371.09) đi phẳng. Động lượng: RSI(14) trung tính quanh 49; MACD trên đường tín hiệu với histogram mở rộng — lực tăng còn khỏe. Biến động trung bình (ATR14) 13.88/phiên.
 
 ### SOXL — Direxion Daily Semiconductor Bull 3x
 
-SOXL tăng mạnh nhất tuần trong nhóm theo dõi với mức +3.35% (4 tuần: +7.00%), vẫn cách xa đỉnh 13 tuần (−52.00%). Giá trị giao dịch thấp hơn hẳn trung bình — biến động chưa có dòng tiền lớn đứng sau. Vùng giá đáng chú ý: hỗ trợ 130.00 (đáy tuần), kháng cự 154.13 (đỉnh tuần). Xu hướng: **đi ngang / hỗn hợp** — giá trên SMA20 (133.32) trong khi SMA50 (180.26) đi phẳng. Động lượng: RSI(14) trung tính quanh 49; MACD trên đường tín hiệu với histogram mở rộng — lực tăng còn khỏe. Biến động trung bình (ATR14) 20.48/phiên.
+SOXL tăng mạnh trong tuần với mức +3.35% (4 tuần: +7.00%), vẫn cách xa đỉnh 13 tuần (−52.00%). Giá trị giao dịch thấp hơn hẳn trung bình — biến động chưa có dòng tiền lớn đứng sau. Vùng giá đáng chú ý: hỗ trợ 130.00 (đáy tuần), kháng cự 154.13 (đỉnh tuần). Xu hướng: **đi ngang / hỗn hợp** — giá trên SMA20 (133.32) trong khi SMA50 (180.26) đi phẳng. Động lượng: RSI(14) trung tính quanh 49; MACD trên đường tín hiệu với histogram mở rộng — lực tăng còn khỏe. Biến động trung bình (ATR14) 20.48/phiên.
 
 ### TQQQ — ProShares UltraPro QQQ (3x NASDAQ-100)
 
-TQQQ tăng mạnh nhất tuần trong nhóm theo dõi với mức +3.12% (4 tuần: +13.71%), vẫn cách xa đỉnh 13 tuần (−12.83%). Giá trị giao dịch thấp hơn hẳn trung bình — biến động chưa có dòng tiền lớn đứng sau. Vùng giá đáng chú ý: hỗ trợ 72.24 (đáy tuần), kháng cự 77.85 (đỉnh tuần). Xu hướng: **đi ngang / hỗn hợp** — giá trên SMA20 (69.39) trong khi SMA50 (73.30) đi phẳng. Động lượng: RSI(14) ở 58 — động lượng tích cực; MACD còn trên đường tín hiệu nhưng histogram đang thu hẹp — đà tăng chậm lại. Biến động trung bình (ATR14) 3.76/phiên.
+TQQQ tăng mạnh trong tuần với mức +3.12% (4 tuần: +13.71%), vẫn cách xa đỉnh 13 tuần (−12.83%). Giá trị giao dịch thấp hơn hẳn trung bình — biến động chưa có dòng tiền lớn đứng sau. Vùng giá đáng chú ý: hỗ trợ 72.24 (đáy tuần), kháng cự 77.85 (đỉnh tuần). Xu hướng: **đi ngang / hỗn hợp** — giá trên SMA20 (69.39) trong khi SMA50 (73.30) đi phẳng. Động lượng: RSI(14) ở 58 — động lượng tích cực; MACD còn trên đường tín hiệu nhưng histogram đang thu hẹp — đà tăng chậm lại. Biến động trung bình (ATR14) 3.76/phiên.
 
 ### NVDA — NVIDIA Corp.
 

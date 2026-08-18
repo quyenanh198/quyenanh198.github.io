@@ -32,6 +32,10 @@ module.exports = function (eleventyConfig) {
 
   eleventyConfig.addGlobalData("currentYear", () => new Date().getFullYear());
 
+  // Cache-busting token for static assets: changes on every build so browsers
+  // pick up fresh CSS/JS after each deploy despite same-URL caching.
+  eleventyConfig.addGlobalData("assetVersion", () => Date.now().toString(36));
+
   eleventyConfig.addFilter("readingTime", (content) => {
     const words = String(content).replace(/<[^>]*>/g, "").split(/\s+/).filter(Boolean).length;
     const minutes = Math.max(1, Math.round(words / 200));

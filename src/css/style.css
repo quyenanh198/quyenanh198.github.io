@@ -436,6 +436,50 @@ button.lookup-chip:hover {
   font-size: 0.78em;
 }
 
+.ind-settings {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 8px 0;
+  background: var(--bg);
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.set-label {
+  width: 260px;
+  font-size: 0.85em;
+  color: var(--fg-muted);
+}
+
+.ind-settings input[type="number"] {
+  width: 72px;
+  font: inherit;
+  font-size: 0.85em;
+  background: var(--bg-subtle);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.ind-settings input[type="number"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.set-actions {
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
 .chart-wrap:fullscreen {
   background: var(--bg);
   padding: 20px 24px;

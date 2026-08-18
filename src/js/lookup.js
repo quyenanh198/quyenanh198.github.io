@@ -281,6 +281,7 @@
 
   var charts = [];
   var mainChart = null;
+  var futureTail = null; // future time slots when the Ichimoku cloud projects ahead
   var view = { series: null, intraday: false, rangeLabel: DEFAULT_LABEL };
   var IND_DEFAULTS = {
     sma20: true, sma50: true, sma200: false, ema20: false, bb: false,
@@ -488,11 +489,43 @@
     return { k: kOut, d: dOut };
   }
 
-  // Ichimoku: tenkan/kijun, senkou A/B shifted forward within available bars,
-  // chikou shifted back. (The cloud is not projected past the last bar.)
-  function ichimokuArr(candles, tP, kP, bP) {
+  // Future time slots after the last bar: next trading weekdays for daily
+  // series, or the most common bar interval for intraday series.
+  function futureTimesFor(candles, count) {
+    if (candles.length < 2 || count <= 0) return [];
+    var out = [];
+    var lastT = candles[candles.length - 1].time;
+    if (typeof lastT === "number") {
+      var freq = {}, best = 0, step = 0;
+      for (var i = Math.max(1, candles.length - 60); i < candles.length; i++) {
+        var d = candles[i].time - candles[i - 1].time;
+        freq[d] = (freq[d] || 0) + 1;
+        if (freq[d] > best) { best = freq[d]; step = d; }
+      }
+      if (!step) return [];
+      for (var j = 1; j <= count; j++) out.push(lastT + j * step);
+    } else {
+      var dt = new Date(lastT + "T00:00:00Z");
+      while (out.length < count) {
+        dt.setUTCDate(dt.getUTCDate() + 1);
+        var dow = dt.getUTCDay();
+        if (dow === 0 || dow === 6) continue;
+        out.push(dt.toISOString().slice(0, 10));
+      }
+    }
+    return out;
+  }
+
+  // Ichimoku: tenkan/kijun, senkou A/B shifted forward (projected into the
+  // future when futureTimes slots are provided), chikou shifted back.
+  function ichimokuArr(candles, tP, kP, bP, futureTimes) {
     var len = candles.length;
     if (len < bP + kP) return null;
+    var timeAt = function (idx) {
+      if (idx < len) return candles[idx].time;
+      var f = futureTimes || [];
+      return idx - len < f.length ? f[idx - len] : null;
+    };
     var hi = function (p) { return typeof p.h === "number" ? p.h : p.c; };
     var lo = function (p) { return typeof p.l === "number" ? p.l : p.c; };
     var midpoint = function (i, n) {
@@ -507,11 +540,13 @@
     for (var i = 0; i < len; i++) {
       if (i >= tP - 1) tenkan.push({ time: candles[i].time, value: midpoint(i, tP) });
       if (i >= kP - 1) kijun.push({ time: candles[i].time, value: midpoint(i, kP) });
-      if (i >= kP - 1 && i >= tP - 1 && i + kP < len) {
-        spanA.push({ time: candles[i + kP].time, value: (midpoint(i, tP) + midpoint(i, kP)) / 2 });
+      if (i >= kP - 1 && i >= tP - 1) {
+        var tA = timeAt(i + kP);
+        if (tA !== null) spanA.push({ time: tA, value: (midpoint(i, tP) + midpoint(i, kP)) / 2 });
       }
-      if (i >= bP - 1 && i + kP < len) {
-        spanB.push({ time: candles[i + kP].time, value: midpoint(i, bP) });
+      if (i >= bP - 1) {
+        var tB = timeAt(i + kP);
+        if (tB !== null) spanB.push({ time: tB, value: midpoint(i, bP) });
       }
       if (i >= kP) chikou.push({ time: candles[i - kP].time, value: candles[i].c });
     }
@@ -610,7 +645,10 @@
       fromStr = from.toISOString().slice(0, 10);
     }
     var first = series[0].d;
-    mainChart.timeScale().setVisibleRange({ from: fromStr > first ? fromStr : first, to: last });
+    var toStr = futureTail && futureTail.length && typeof futureTail[0] === "string"
+      ? futureTail[futureTail.length - 1]
+      : last;
+    mainChart.timeScale().setVisibleRange({ from: fromStr > first ? fromStr : first, to: toStr });
   }
 
   function updateLegend() {
@@ -693,8 +731,15 @@
       overlayLine(bb.mid, "#9a9aa2", 1, 0);
       overlayLine(bb.lo, "#9a9aa2", 1, 2);
     }
+    futureTail = indicators.ichi ? futureTimesFor(series, params.ichiK) : null;
+    var padFuture = function (arr) {
+      if (futureTail && arr) {
+        futureTail.forEach(function (t) { arr.push({ time: t }); });
+      }
+      return arr;
+    };
     if (indicators.ichi) {
-      var ichi = ichimokuArr(series, params.ichiT, params.ichiK, params.ichiB);
+      var ichi = ichimokuArr(series, params.ichiT, params.ichiK, params.ichiB, futureTail);
       if (ichi) {
         overlayLine(ichi.spanA, "#1a7f4b", 1);
         overlayLine(ichi.spanB, "#b06fd8", 1);
@@ -722,7 +767,7 @@
         color: "#e6a23c", lineWidth: 1.5,
         priceLineVisible: false, lastValueVisible: true,
       });
-      rsiLine.setData(rsiSeriesArr(series, params.rsi));
+      rsiLine.setData(padFuture(rsiSeriesArr(series, params.rsi)));
       [70, 30].forEach(function (lvl) {
         rsiLine.createPriceLine({ price: lvl, color: cssVar("--fg-muted"), lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
       });
@@ -737,11 +782,11 @@
           color: "#2aa9a9", lineWidth: 1.5,
           priceLineVisible: false, lastValueVisible: true,
         });
-        kLine.setData(stoch.k);
+        kLine.setData(padFuture(stoch.k));
         stochChart.addLineSeries({
           color: "#c0392b", lineWidth: 1,
           priceLineVisible: false, lastValueVisible: false,
-        }).setData(stoch.d);
+        }).setData(padFuture(stoch.d));
         [80, 20].forEach(function (lvl) {
           kLine.createPriceLine({ price: lvl, color: cssVar("--fg-muted"), lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
         });
@@ -753,9 +798,9 @@
       var macdData = macdSeriesArr(series, gain, loss, params.macdF, params.macdS, params.macdSig);
       if (macdData) {
         var macdChart = makeChart(macdEl, view.intraday, bottomPane === "macd");
-        macdChart.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false }).setData(macdData.hist);
-        macdChart.addLineSeries({ color: "#5b8def", lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false }).setData(macdData.line);
-        macdChart.addLineSeries({ color: "#e6a23c", lineWidth: 1, priceLineVisible: false, lastValueVisible: false }).setData(macdData.signal);
+        macdChart.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false }).setData(padFuture(macdData.hist));
+        macdChart.addLineSeries({ color: "#5b8def", lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false }).setData(padFuture(macdData.line));
+        macdChart.addLineSeries({ color: "#e6a23c", lineWidth: 1, priceLineVisible: false, lastValueVisible: false }).setData(padFuture(macdData.signal));
       }
     }
 

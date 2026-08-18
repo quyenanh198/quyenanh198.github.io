@@ -1,0 +1,43 @@
+---
+layout: base.njk
+title: Reports
+permalink: /reports/
+---
+<h1>Báo cáo thị trường</h1>
+<p class="lede">Báo cáo tự động: theo dõi danh mục ticker, tổng hợp thị trường tuần/tháng và phân tích dòng tiền luân chuyển giữa các nhóm ngành.</p>
+
+<section>
+  <h2>Danh mục theo dõi</h2>
+  <p class="watchlist-row">
+    {% for t in watchlist.tickers %}<span class="ticker-tag" title="{{ t.name }}">{{ t.symbol }}</span>{% endfor %}
+  </p>
+</section>
+
+{% set groups = [
+  { type: "ticker", label: "Báo cáo ticker" },
+  { type: "weekly", label: "Thị trường tuần" },
+  { type: "monthly", label: "Thị trường tháng" },
+  { type: "sector-flow", label: "Dòng tiền ngành" }
+] %}
+
+{% for group in groups %}
+{% set items = collections.reports | ofReportType(group.type) %}
+<section>
+  <h2>{{ group.label }}</h2>
+  {% if items.length %}
+  <ul class="post-list">
+    {% for report in items %}
+    {% if loop.index <= 6 %}
+    <li>
+      <time datetime="{{ report.date | htmlDateString }}">{{ report.date | readableDate }}</time>
+      <a href="{{ report.url }}">{{ report.data.title }}</a>
+      {% if report.data.excerpt %}<p>{{ report.data.excerpt }}</p>{% endif %}
+    </li>
+    {% endif %}
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="post-meta">Chưa có báo cáo — báo cáo đầu tiên sẽ được tạo tự động theo lịch.</p>
+  {% endif %}
+</section>
+{% endfor %}

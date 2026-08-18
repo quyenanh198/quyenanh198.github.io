@@ -11,6 +11,16 @@ module.exports = function (eleventyConfig) {
     )
   );
 
+  eleventyConfig.addCollection("reports", (collectionApi) =>
+    collectionApi.getFilteredByGlob("src/reports/*.md").sort(
+      (a, b) => b.date - a.date
+    )
+  );
+
+  eleventyConfig.addFilter("ofReportType", (reports, type) =>
+    (reports || []).filter((r) => r.data.reportType === type)
+  );
+
   eleventyConfig.addFilter("readableDate", (dateObj) =>
     DateTime.fromJSDate(dateObj, { zone: "utc" }).toFormat("dd LLL yyyy")
   );

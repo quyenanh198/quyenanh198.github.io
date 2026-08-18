@@ -7,10 +7,40 @@ Alpha Vantage API key để lấy nến 1 phút lịch sử sâu.
 Miễn phí: gói Free của Cloudflare Workers cho 100.000 request/ngày — quá thừa cho nhu cầu cá nhân.
 
 > **Lưu ý (08/2026):** flow "Create application → Start with Hello World" trên dashboard
-> Cloudflare đang có lỗi được nhiều người báo cáo (nút Deploy bị xám). Vì vậy hãy dùng
-> **Cách 1 (Wrangler CLI)** — không phụ thuộc giao diện dashboard.
+> Cloudflare đang có lỗi được nhiều người báo cáo (nút Deploy bị xám). Hãy dùng một trong
+> các cách dưới đây.
 
-## Cách 1 (khuyến nghị): deploy bằng Wrangler CLI — 1 lệnh
+## Cách 1 (hoàn toàn trên web, khuyến nghị): Import repository
+
+Deploy trực tiếp từ repo GitHub này, không cần cài gì; về sau mỗi lần repo cập nhật code
+worker, Cloudflare tự deploy lại.
+
+1. Tạo tài khoản miễn phí tại https://dash.cloudflare.com (chỉ cần email).
+2. Menu trái **Workers & Pages** → **Create** → trong tab **Workers**, chọn
+   **Import a repository** (Kết nối kho lưu trữ).
+3. Bấm **Connect GitHub** → đăng nhập GitHub → cài Cloudflare app và cấp quyền cho repo
+   `quyenanh198.github.io` → chọn repo này.
+4. Ở bước cấu hình:
+   - **Project name**: `market-proxy`
+   - **Root directory** (thư mục gốc): `workers`  ← quan trọng
+   - Build/deploy command: giữ mặc định (`npx wrangler deploy`).
+5. Bấm **Create and deploy**. Xong sẽ thấy URL dạng
+   `https://market-proxy.<tên-tài-khoản>.workers.dev`.
+6. Kiểm tra nhanh: mở
+   `https://market-proxy.<tên-tài-khoản>.workers.dev/chart?symbol=AAPL&interval=1d&range=1mo`
+   — thấy JSON giá là thành công.
+
+## Cách 2 (trên web, 1 cú bấm): nút Deploy to Cloudflare
+
+Mở link sau và làm theo hướng dẫn trên màn hình (đăng nhập Cloudflare + GitHub):
+
+https://deploy.workers.cloudflare.com/?url=https://github.com/quyenanh198/quyenanh198.github.io/tree/master/workers
+
+Cloudflare sẽ tạo một bản sao thư mục `workers/` thành repo mới trong tài khoản GitHub của
+bạn rồi deploy. *Lưu ý:* flow này đang có lỗi lẻ tẻ được báo cáo (worker tạo ra vẫn là
+"Hello World" thay vì code thật) — nếu gặp, hãy dùng Cách 1.
+
+## Cách 3: deploy bằng Wrangler CLI — 1 lệnh
 
 Yêu cầu: máy có Node.js (https://nodejs.org, bản LTS) và đã tạo tài khoản miễn phí tại
 https://dash.cloudflare.com (chỉ cần email).
@@ -30,7 +60,7 @@ npx wrangler@latest deploy
 
 Cập nhật code worker sau này: sửa `market-proxy.js` rồi chạy lại đúng lệnh trên.
 
-## Cách 2: qua dashboard (nếu giao diện cho phép)
+## Cách 4: dán code thủ công qua dashboard (nếu giao diện cho phép)
 
 1. https://dash.cloudflare.com → menu trái **Workers & Pages** (một số tài khoản hiển thị là
    **Compute (Workers)**).

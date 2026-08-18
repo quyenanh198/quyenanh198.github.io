@@ -62,6 +62,17 @@ export default {
 
     const url = new URL(request.url);
 
+    if (url.pathname === "/" || url.pathname === "") {
+      return json({
+        ok: true,
+        service: "market-proxy",
+        usage: {
+          chart: "/chart?symbol=AAPL&interval=1d&range=1mo",
+          av: "/av?function=TIME_SERIES_INTRADAY&symbol=AAPL&interval=1min&month=2020-03",
+        },
+      }, 200, cors);
+    }
+
     if (url.pathname === "/chart") {
       const symbol = url.searchParams.get("symbol") || "";
       const interval = url.searchParams.get("interval") || "1d";
@@ -74,7 +85,13 @@ export default {
         "?interval=" + interval + "&range=" + range + "&events=div%2Csplit%2Cearn";
       // Intraday data goes stale fast; daily can sit in cache longer.
       const ttl = interval === "1d" || interval === "1wk" || interval === "1mo" ? 300 : 60;
-      const ua = { "User-Agent": "Mozilla/5.0 (market-proxy)" };
+      // Yahoo sometimes rejects obviously non-browser requests from
+      // datacenter IPs; send full browser-like headers.
+      const ua = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+      };
 
       let res = await passThrough("https://query1.finance.yahoo.com" + path, ttl, cors, ua);
       if (res.status >= 400) {

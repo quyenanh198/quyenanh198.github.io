@@ -470,6 +470,10 @@ button.lookup-chip:hover {
   .lookup-chart { height: 260px; }
 }
 
+.lookup-analysis {
+  max-width: 1000px;
+}
+
 .lookup-analysis h2 {
   font-size: 1.2em;
   margin: 1.6em 0 0.6em;
@@ -517,7 +521,23 @@ button.lookup-chip:hover {
 
 .lookup-table th {
   color: var(--fg-muted);
+}
+
+.lookup-card > .lookup-table th {
   width: 48%;
+}
+
+.tf-table {
+  max-width: 900px;
+}
+
+.tf-table th {
+  white-space: nowrap;
+}
+
+.tf-table thead th {
+  font-weight: 600;
+  color: var(--fg);
 }
 
 .lookup-trend {

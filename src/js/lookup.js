@@ -13,18 +13,20 @@
 
   // interval "1d" ranges reuse the 10y daily dataset and only move the
   // visible window; intraday ranges fetch their own dataset on demand.
+  // TradingView-style range labels. interval "1d" entries reuse the shared
+  // 10y daily dataset and only move the visible window.
   var RANGES = [
     { label: "1D", interval: "5m", range: "1d" },
     { label: "5D", interval: "15m", range: "5d" },
     { label: "1M", interval: "1h", range: "1mo" },
     { label: "3M", interval: "1h", range: "3mo" },
-    { label: "6T", interval: "1d", months: 6 },
-    { label: "1N", interval: "1d", months: 12 },
-    { label: "2N", interval: "1d", months: 24 },
-    { label: "5N", interval: "1d", months: 60 },
-    { label: "10N", interval: "1d", months: 120 },
+    { label: "6M", interval: "1d", months: 6 },
+    { label: "YTD", interval: "1d", ytd: true },
+    { label: "1Y", interval: "1d", months: 12 },
+    { label: "5Y", interval: "1d", months: 60 },
+    { label: "10Y", interval: "1d", months: 120 },
   ];
-  var DEFAULT_LABEL = "1N";
+  var DEFAULT_LABEL = "1Y";
 
   var fmt = {
     price: function (x) {
@@ -159,7 +161,8 @@
 
   function yahooUrl(host, symbol, interval, range) {
     return "https://" + host + ".finance.yahoo.com/v8/finance/chart/" +
-      encodeURIComponent(symbol) + "?interval=" + interval + "&range=" + range;
+      encodeURIComponent(symbol) + "?interval=" + interval + "&range=" + range +
+      "&events=div%2Csplit%2Cearn";
   }
 
   function fetchWithTimeout(url, ms) {
@@ -207,6 +210,13 @@
         }
         if (series.length < (intraday ? 10 : 30)) throw new Error("series too short");
         var meta = r.meta || {};
+        var ev = r.events || {};
+        var toList = function (obj) {
+          return obj ? Object.keys(obj).map(function (k) { return obj[k]; }) : [];
+        };
+        var evDate = function (x) {
+          return new Date((x.date || x.timestamp || 0) * 1000).toISOString().slice(0, 10);
+        };
         var data = {
           source: "Yahoo Finance",
           live: true,
@@ -214,6 +224,18 @@
           name: meta.longName || meta.shortName || symbol,
           currency: meta.currency || "USD",
           series: series,
+          dividends: toList(ev.dividends)
+            .filter(function (d) { return isFinite(d.amount); })
+            .map(function (d) { return { date: evDate(d), amount: d.amount }; })
+            .sort(function (x, y) { return x.date < y.date ? -1 : 1; }),
+          splits: toList(ev.splits)
+            .map(function (s) {
+              return { date: evDate(s), ratio: s.splitRatio || (s.numerator + ":" + s.denominator) };
+            })
+            .sort(function (x, y) { return x.date < y.date ? -1 : 1; }),
+          earnings: toList(ev.earnings)
+            .map(evDate)
+            .sort(),
         };
         dataCache[key] = data;
         return data;
@@ -329,12 +351,17 @@
     return true;
   }
 
-  function setDailyRange(series, months) {
+  function setDailyRange(series, r) {
     if (!chart || !series.length) return;
     var last = series[series.length - 1].d;
-    var from = new Date(last + "T00:00:00Z");
-    from.setUTCMonth(from.getUTCMonth() - months);
-    var fromStr = from.toISOString().slice(0, 10);
+    var fromStr;
+    if (r.ytd) {
+      fromStr = last.slice(0, 4) + "-01-01";
+    } else {
+      var from = new Date(last + "T00:00:00Z");
+      from.setUTCMonth(from.getUTCMonth() - r.months);
+      fromStr = from.toISOString().slice(0, 10);
+    }
     var first = series[0].d;
     chart.timeScale().setVisibleRange({
       from: fromStr > first ? fromStr : first,
@@ -511,13 +538,37 @@
       ", 1 tháng " + fmt.pct(a.pct21) + ", 3 tháng " + fmt.pct(a.pct63) + ", 6 tháng " + fmt.pct(a.pct126) +
       (isFinite(a.pct252) ? ", 1 năm " + fmt.pct(a.pct252) : "") + ".</p>";
 
-    // 2. Timeframe table + paragraphs
+    // 2. Timeframe table (TradingView-style rating) + paragraphs
+    var closesBy = { D: closesD, W: closesW, M: closesM };
+    var tvLabels = { D: "1D (ngày)", W: "1W (tuần)", M: "1M (tháng)" };
+    var tvRating = function (t) {
+      if (!t.trend) return { label: "—", cls: "flat" };
+      var s = t.trend === "up" ? 2 : t.trend === "down" ? -2 : 0, n = 2;
+      if (isFinite(t.rsi)) { s += t.rsi >= 55 ? 1 : t.rsi <= 45 ? -1 : 0; n += 1; }
+      if (t.macd) { s += t.macd.hist > 0 ? 1 : -1; n += 1; }
+      var r = s / n;
+      return r >= 0.75 ? { label: "Mua mạnh", cls: "gain" } :
+        r >= 0.25 ? { label: "Mua", cls: "gain" } :
+        r > -0.25 ? { label: "Trung lập", cls: "flat" } :
+        r > -0.75 ? { label: "Bán", cls: "loss" } : { label: "Bán mạnh", cls: "loss" };
+    };
     var tfRows = ["D", "W", "M"].map(function (k) {
       var t = tf[k];
-      return "<tr><th>" + labels[k] + "</th><td>" +
-        (t.trend ? TREND_VN[t.trend] : "Thiếu dữ liệu") + "</td><td>" +
-        (isFinite(t.rsi) ? t.rsi.toFixed(0) : "n/a") + "</td><td>" +
-        macdVn(t.macd) + "</td></tr>";
+      var cs = closesBy[k];
+      var chg = cs.length > 1 ? pctChange(cs[cs.length - 1], cs[cs.length - 2]) : NaN;
+      var rating = tvRating(t);
+      var vsFast = isFinite(t.fast) ? pctChange(cs[cs.length - 1], t.fast) : NaN;
+      var vsSlow = isFinite(t.slow) ? pctChange(cs[cs.length - 1], t.slow) : NaN;
+      var cell = function (x) {
+        return '<td><span class="' + (x >= 0 ? "gain" : "loss") + '">' + fmt.pct(x) + "</span></td>";
+      };
+      return "<tr><th>" + tvLabels[k] + "</th>" +
+        '<td><span class="' + rating.cls + '"><strong>' + rating.label + "</strong></span></td>" +
+        "<td>" + (t.trend ? TREND_VN[t.trend] : "Thiếu dữ liệu") + "</td>" +
+        cell(chg) +
+        "<td>" + (isFinite(t.rsi) ? t.rsi.toFixed(0) : "n/a") + "</td>" +
+        "<td>" + macdVn(t.macd) + "</td>" +
+        cell(vsFast) + cell(vsSlow) + "</tr>";
     }).join("");
     var tfParas = tfPara("ngày", closesD, tf.D) + tfPara("tuần", closesW, tf.W) + tfPara("tháng", closesM, tf.M);
 
@@ -531,7 +582,102 @@
       ? "Biến động rất cao: ATR14 ≈ " + fmt.price(atr) + " (~" + atrPct.toFixed(1) + "%/phiên). Với biên độ này, một biến động bất lợi 2–3 phiên có thể xóa cả chục phần trăm — chỉ phù hợp tỷ trọng nhỏ và kỷ luật dừng lỗ chặt."
       : atrPct >= 2 ? "Biến động ở mức cao: ATR14 ≈ " + fmt.price(atr) + " (~" + atrPct.toFixed(1) + "%/phiên) — cần đặt dừng lỗ đủ rộng để không bị quét bởi nhiễu trong phiên."
       : "Biến động ở mức bình thường: ATR14 ≈ " + fmt.price(atr) + " (~" + atrPct.toFixed(1) + "%/phiên).";
-    var momentum = "<p>" + [flowText, volaText, crossNote].filter(Boolean).join(" ") + "</p>";
+    // Bollinger Bands (20, 2) position on the daily frame
+    var bbText = "";
+    if (closesD.length >= 20) {
+      var last20c = closesD.slice(-20);
+      var bbMid = sma(closesD, 20);
+      var sd = Math.sqrt(last20c.reduce(function (s, x) { return s + (x - bbMid) * (x - bbMid); }, 0) / 20);
+      var bbUp = bbMid + 2 * sd, bbLo = bbMid - 2 * sd;
+      var bw = ((bbUp - bbLo) / bbMid) * 100;
+      bbText = a.close > bbUp
+        ? "Giá đang đóng cửa trên dải Bollinger trên (" + fmt.price(bbUp) + ") — trạng thái quá trớn, thường kéo theo nhịp hồi về dải giữa " + fmt.price(bbMid) + "."
+        : a.close < bbLo
+        ? "Giá đang nằm dưới dải Bollinger dưới (" + fmt.price(bbLo) + ") — bị bán quá trớn, dễ có nhịp nảy kỹ thuật về dải giữa " + fmt.price(bbMid) + "."
+        : bw < 8
+        ? "Dải Bollinger đang co hẹp (băng thông ~" + bw.toFixed(1) + "%) — biến động nén lại, thường là giai đoạn tích lũy trước một cú bung mạnh; hướng bung sẽ do phe thắng tại " + fmt.price(bbUp) + "/" + fmt.price(bbLo) + " quyết định."
+        : "Trong dải Bollinger (20, 2), giá đang ở " + (a.close > bbMid ? "nửa trên (trên dải giữa " + fmt.price(bbMid) + ") — thiên hướng tích cực" : "nửa dưới (dưới dải giữa " + fmt.price(bbMid) + ") — thiên hướng thận trọng") + "; dải trên/dưới tại " + fmt.price(bbUp) + " / " + fmt.price(bbLo) + ".";
+    }
+    var momentum = "<p>" + [flowText, volaText, bbText, crossNote].filter(Boolean).join(" ") + "</p>";
+
+    // Risk statistics: annualized volatility and 1y max drawdown
+    var riskHtml = "";
+    if (closesD.length > 30) {
+      var rets = [];
+      for (var ri = Math.max(1, closesD.length - 252); ri < closesD.length; ri++) {
+        rets.push(closesD[ri] / closesD[ri - 1] - 1);
+      }
+      var mean = rets.reduce(function (s, x) { return s + x; }, 0) / rets.length;
+      var variance = rets.reduce(function (s, x) { return s + (x - mean) * (x - mean); }, 0) / rets.length;
+      var annVol = Math.sqrt(variance) * Math.sqrt(252) * 100;
+      var peak = -Infinity, maxDD = 0;
+      closesD.slice(-252).forEach(function (c) {
+        if (c > peak) peak = c;
+        var dd = (c / peak - 1) * 100;
+        if (dd < maxDD) maxDD = dd;
+      });
+      var volTier = annVol >= 60 ? "cực cao — cùng nhóm với các ETF đòn bẩy/cổ phiếu đầu cơ" :
+        annVol >= 35 ? "cao hơn hẳn mặt bằng thị trường (SPY thường quanh 12–20%)" :
+        annVol >= 18 ? "quanh mặt bằng chung của cổ phiếu riêng lẻ" : "thấp — biến động êm hơn mặt bằng thị trường";
+      riskHtml = "<p>Biến động năm hóa (đo trên 12 tháng): <strong>" + annVol.toFixed(0) + "%</strong> — " + volTier +
+        ". Mức giảm sâu nhất từ đỉnh trong 12 tháng qua (max drawdown): <strong>" + fmt.pct(maxDD) + "</strong>. " +
+        "Hai con số này là thước đo trực tiếp cho việc chọn tỷ trọng: mức thua lỗ bạn từng phải chịu nếu mua đúng đỉnh gần nhất chính là " + fmt.pct(maxDD) +
+        ", nên chỉ phân bổ tỷ trọng mà bạn vẫn giữ được kỷ luật khi kịch bản đó lặp lại.</p>";
+    }
+
+    // Dividends, splits & earnings
+    var lastDate = series[series.length - 1].d;
+    var yearAgo = new Date(new Date(lastDate + "T00:00:00Z").getTime() - 365 * 86400e3).toISOString().slice(0, 10);
+    var twoYearsAgo = new Date(new Date(lastDate + "T00:00:00Z").getTime() - 730 * 86400e3).toISOString().slice(0, 10);
+    var divs = data.dividends || [];
+    var ttm = divs.filter(function (d) { return d.date >= yearAgo; });
+    var prevTtm = divs.filter(function (d) { return d.date >= twoYearsAgo && d.date < yearAgo; });
+    var sumAmt = function (xs) { return xs.reduce(function (s, d) { return s + d.amount; }, 0); };
+    var divHtml;
+    if (!data.live && !divs.length) {
+      divHtml = "<p>Nguồn dữ liệu dự phòng không kèm lịch sử cổ tức — tra lại khi nguồn trực tuyến khả dụng để xem mục này.</p>";
+    } else if (!divs.length) {
+      divHtml = "<p>Không ghi nhận đợt chi trả cổ tức nào trong 10 năm dữ liệu — toàn bộ lợi nhuận (nếu có) đến từ tăng giá. Điều này thường gặp ở cổ phiếu tăng trưởng và các ETF tái đầu tư.</p>";
+    } else {
+      var ttmSum = sumAmt(ttm), prevSum = sumAmt(prevTtm);
+      var lastDiv = divs[divs.length - 1];
+      var growth = prevSum > 0 ? pctChange(ttmSum, prevSum) : NaN;
+      divHtml = "<p>Cổ tức 12 tháng gần nhất: <strong>" + ttmSum.toFixed(4).replace(/0+$/, "").replace(/\.$/, "") + " " + esc(data.currency) +
+        "/cổ phiếu</strong> qua " + ttm.length + " đợt chi trả, tương đương tỷ suất <strong>" + ((ttmSum / a.close) * 100).toFixed(2) + "%/năm</strong> theo giá hiện tại." +
+        (isFinite(growth) ? " So với 12 tháng liền trước, tổng cổ tức " + (growth >= 0 ? "tăng " : "giảm ") + fmt.pct(growth) + "." : "") +
+        " Đợt gần nhất: " + lastDiv.amount + " " + esc(data.currency) + " (giao dịch không hưởng quyền " + fmt.date(lastDiv.date) + ").</p>";
+    }
+    var splits = data.splits || [];
+    if (splits.length) {
+      var lastSplit = splits[splits.length - 1];
+      divHtml += "<p>Chia tách gần nhất: tỷ lệ <strong>" + esc(lastSplit.ratio) + "</strong> ngày " + fmt.date(lastSplit.date) +
+        (splits.length > 1 ? " (tổng cộng " + splits.length + " lần chia tách trong 10 năm)" : "") + ".</p>";
+    }
+    var earns = data.earnings || [];
+    if (earns.length) {
+      var today = new Date().toISOString().slice(0, 10);
+      var next = earns.filter(function (d) { return d >= today; })[0];
+      var lastPast = earns.filter(function (d) { return d < today; }).pop();
+      divHtml += "<p>" + (next ? "Kỳ công bố kết quả kinh doanh (earnings) kế tiếp: <strong>" + fmt.date(next) + "</strong> — giá thường biến động mạnh quanh mốc này, cân nhắc khi đặt dừng lỗ sát." : "") +
+        (lastPast ? (next ? " " : "") + "Kỳ earnings gần nhất đã công bố: " + fmt.date(lastPast) + "." : "") + "</p>";
+    } else if (data.live) {
+      divHtml += '<p class="lookup-name">Lịch earnings không có trong nguồn dữ liệu miễn phí hiện dùng — tham khảo thêm trên trang IR của doanh nghiệp.</p>';
+    }
+
+    // Style-based suggestions
+    var styleHtml = "<ul>" +
+      "<li><strong>Lướt sóng ngắn hạn:</strong> " + (tf.D.trend === "up"
+        ? "canh mua tại nhịp chạm SMA20 (" + fmt.price(a.sma20) + ") hoặc breakout " + fmt.price(a.resist) + " kèm khối lượng; thoát nhanh nếu mất đáy phiên trước. Dùng các khung 1D/5D (nến 5–15 phút) để tinh chỉnh điểm vào."
+        : tf.D.trend === "down" ? "chỉ phù hợp canh bán/đứng ngoài; nhịp hồi về SMA20 (" + fmt.price(a.sma20) + ") là vùng cân nhắc thoát vị thế cũ, không phải điểm mua mới."
+        : "biên tích lũy " + fmt.price(a.support) + "–" + fmt.price(a.resist) + " là sân chơi chính: mua cận dưới, chốt cận trên, dừng lỗ khi giá thoát biên.") + "</li>" +
+      "<li><strong>Trung hạn (vài tuần – vài tháng):</strong> " + (tf.W.trend === "up"
+        ? "xu hướng tuần vẫn tăng — chiến lược cốt lõi là nắm giữ theo xu hướng, chỉ mua thêm ở các nhịp chỉnh về MA khung tuần và giảm tỷ trọng khi khung tuần mất cấu trúc tăng."
+        : tf.W.trend === "down" ? "khung tuần đang giảm — kiên nhẫn đứng ngoài cho tới khi tuần đóng cửa lấy lại MA nhanh; vào sớm lúc này là bắt dao rơi."
+        : "khung tuần đi ngang — chờ tuần đóng cửa thoát khỏi biên giằng co rồi đi theo hướng đó sẽ có xác suất cao hơn đoán trước.") + "</li>" +
+      "<li><strong>Dài hạn (tích sản):</strong> " + (tf.M.trend === "up"
+        ? "xu hướng tháng vẫn tăng" + (isFinite(a.sma200) ? ", giá " + (a.close > a.sma200 ? "trên" : "dưới") + " SMA200 (" + fmt.price(a.sma200) + ")" : "") + " — mua tích lũy định kỳ vẫn hợp lý; các nhịp giảm về SMA200 lịch sử thường là vùng giải ngân tốt."
+        : "xu hướng tháng chưa ủng hộ — nếu tích sản định kỳ, cân nhắc chia nhỏ các lần giải ngân và ưu tiên khi giá về vùng đáy biên độ 52 tuần (" + fmt.price(a.lo52) + ").") + "</li>" +
+      "</ul>";
 
     // 4. Trade plan
     var planHtml;
@@ -588,17 +734,24 @@
       "<h2>Phân tích chi tiết " + esc(symbol) + "</h2>" +
       overview +
       "<h2>So sánh khung thời gian</h2>" +
-      '<table class="lookup-table"><thead><tr><th>Khung</th><th>Xu hướng</th><th>RSI(14)</th><th>MACD</th></tr></thead><tbody>' +
+      '<table class="lookup-table tf-table"><thead><tr><th>Khung</th><th>Tín hiệu</th><th>Xu hướng</th><th>% thay đổi</th><th>RSI(14)</th><th>MACD</th><th>Giá/MA nhanh</th><th>Giá/MA chậm</th></tr></thead><tbody>' +
       tfRows + "</tbody></table>" +
+      '<p class="lookup-name">Tín hiệu tổng hợp theo kiểu TradingView (xu hướng MA + RSI + MACD của từng khung). % thay đổi = so với 1 phiên / 1 tuần / 1 tháng liền trước. MA nhanh/chậm: khung ngày SMA20/50, tuần SMA10/30, tháng SMA6/12.</p>' +
       tfParas +
       "<h2>Động lượng, dòng tiền và biến động</h2>" +
       momentum +
+      "<h2>Thống kê rủi ro</h2>" +
+      riskHtml +
+      "<h2>Cổ tức, chia tách &amp; earnings</h2>" +
+      divHtml +
       "<h2>Đánh giá điểm vào</h2>" +
       '<p class="verdict ' + vClass + '">' + verdict + "</p>" +
       "<h2>Kế hoạch giao dịch tham khảo</h2>" +
       planHtml +
       "<h2>Kịch bản và mức cần theo dõi</h2>" +
       scenarios +
+      "<h2>Gợi ý theo phong cách đầu tư</h2>" +
+      styleHtml +
       "</div>";
   }
 
@@ -645,7 +798,7 @@
       return;
     }
     var def = RANGES.filter(function (r) { return r.label === DEFAULT_LABEL; })[0];
-    setDailyRange(data.series, def.months);
+    setDailyRange(data.series, def);
 
     Array.prototype.forEach.call(result.querySelectorAll(".range-btn"), function (btn) {
       btn.addEventListener("click", function () {
@@ -660,7 +813,7 @@
         };
         if (r.interval === "1d") {
           renderChart(chartEl, data.series, false);
-          setDailyRange(data.series, r.months);
+          setDailyRange(data.series, r);
           if (note) note.textContent = "";
           activate();
         } else {

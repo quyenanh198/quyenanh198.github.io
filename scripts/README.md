@@ -11,8 +11,9 @@ GitHub Actions (cron)
        ├─ fetch giá EOD miễn phí: Stooq (chính) → Yahoo Finance (dự phòng)
        ├─ tính toán: % tuần/tháng, sức mạnh tương đối so SPY,
        │  dòng tiền (giá × khối lượng so trung bình), khoảng cách đỉnh 13 tuần…
-       └─ sinh báo cáo markdown tiếng Việt vào src/reports/
-  └─ commit báo cáo mới vào master
+       ├─ sinh báo cáo markdown tiếng Việt vào src/reports/
+       └─ viết bài phân tích tổng hợp (văn xuôi) vào src/posts/ → hiện trên Blog
+  └─ commit báo cáo + bài viết mới vào master
   └─ npm run build (Eleventy) → deploy GitHub Pages
 ```
 
@@ -20,8 +21,8 @@ GitHub Actions (cron)
 
 | Workflow | Lịch (UTC / giờ VN) | Sản phẩm |
 |---|---|---|
-| `reports-weekly.yml` | Thứ 7 01:00 UTC (08:00 VN) | Thị trường tuần + Dòng tiền ngành + Watchlist ticker |
-| `reports-monthly.yml` | Ngày 1 hằng tháng 01:30 UTC (08:30 VN) | Thị trường tháng |
+| `reports-weekly.yml` | Thứ 7 01:00 UTC (08:00 VN) | Thị trường tuần + Dòng tiền ngành + Watchlist ticker + bài phân tích tuần (blog) |
+| `reports-monthly.yml` | Ngày 1 hằng tháng 01:30 UTC (08:30 VN) | Thị trường tháng + bài phân tích tháng (blog) |
 
 Chạy tay bất cứ lúc nào: tab **Actions** trên GitHub → chọn workflow → **Run workflow**,
 hoặc local: `npm run reports:weekly` / `npm run reports:monthly`.

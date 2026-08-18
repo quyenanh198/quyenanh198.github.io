@@ -81,13 +81,31 @@
   // Normalized series item: { d, o, h, l, c, v } (o/h/l/v may be missing on
   // legacy snapshot data — the chart then falls back to a line series).
 
+  function yahooUrl(host, symbol) {
+    return "https://" + host + ".finance.yahoo.com/v8/finance/chart/" +
+      encodeURIComponent(symbol) + "?interval=1d&range=10y";
+  }
+
+  function fetchWithTimeout(url, ms) {
+    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = ctrl && setTimeout(function () { ctrl.abort(); }, ms);
+    return fetch(url, ctrl ? { signal: ctrl.signal } : {}).then(
+      function (res) { if (timer) clearTimeout(timer); return res; },
+      function (err) { if (timer) clearTimeout(timer); throw err; }
+    );
+  }
+
   function fetchYahoo(symbol) {
-    var hosts = ["query1", "query2"];
+    // Direct calls first; Yahoo blocks cross-origin fetch in most browsers,
+    // so public CORS proxies act as the working path for arbitrary symbols.
+    var urls = [
+      yahooUrl("query1", symbol),
+      "https://corsproxy.io/?url=" + encodeURIComponent(yahooUrl("query1", symbol)),
+      "https://api.allorigins.win/raw?url=" + encodeURIComponent(yahooUrl("query2", symbol)),
+    ];
     var attempt = function (idx) {
-      if (idx >= hosts.length) return Promise.reject(new Error("yahoo unreachable"));
-      var url = "https://" + hosts[idx] + ".finance.yahoo.com/v8/finance/chart/" +
-        encodeURIComponent(symbol) + "?interval=1d&range=10y";
-      return fetch(url).then(function (res) {
+      if (idx >= urls.length) return Promise.reject(new Error("yahoo unreachable"));
+      return fetchWithTimeout(urls[idx], 8000).then(function (res) {
         if (!res.ok) throw new Error("HTTP " + res.status);
         return res.json();
       }).then(function (json) {
@@ -110,7 +128,7 @@
         if (series.length < 30) throw new Error("series too short");
         var meta = r.meta || {};
         return {
-          source: "Yahoo Finance (trực tiếp)",
+          source: "Yahoo Finance",
           name: meta.longName || meta.shortName || symbol,
           currency: meta.currency || "USD",
           series: series,

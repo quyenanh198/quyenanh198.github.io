@@ -271,7 +271,7 @@ ${highVol.length
 
 // ---- 3. Ticker watchlist report ----
 const trendPhrase = (s) => {
-  if (s.pctWeek > 3) return "tăng mạnh nhất tuần trong nhóm theo dõi";
+  if (s.pctWeek > 3) return "tăng mạnh trong tuần";
   if (s.pctWeek > 0.15) return s.pct4w > 0 ? "tiếp tục xu hướng tăng" : "hồi phục sau nhịp giảm";
   if (s.pctWeek < -3) return "chịu áp lực bán mạnh";
   if (s.pctWeek < -0.15) return s.pct4w < 0 ? "kéo dài nhịp điều chỉnh" : "điều chỉnh sau sóng tăng";

@@ -2,7 +2,7 @@
   "title": "Quyen Anh",
   "description": "Personal site and blog of Quyen Anh.",
   "url": "https://quyenanh198.github.io",
-  "marketProxy": "",
+  "marketProxy": "https://market-proxy.quyenanh198.workers.dev",
   "author": "Quyen Anh",
   "email": "quyenanh198@gmail.com",
   "nav": [

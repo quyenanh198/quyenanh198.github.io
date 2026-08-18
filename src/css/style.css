@@ -13,12 +13,8 @@
 }
 
 /* Auto-adapt content width to the screen */
-@media (min-width: 1024px) {
-  :root { --max-width: 880px; }
-}
-
-@media (min-width: 1440px) {
-  :root { --max-width: 1040px; }
+@media (min-width: 900px) {
+  :root { --max-width: min(94vw, 1600px); }
 }
 
 :root:not([data-theme="light"]) {
@@ -437,8 +433,14 @@ button.lookup-chip:hover {
 
 .range-bar {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin: 10px 0 8px;
+}
+
+.range-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .range-btn {

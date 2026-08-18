@@ -4,30 +4,29 @@ title: "Thị trường tuần 10–14/08/2026"
 date: 2026-08-14
 reportType: weekly
 tickers: [SPY, QQQ, DIA, IWM]
-excerpt: "Chỉ số tiếp tục neo gần đỉnh: QQQ +1.1%, IWM +1.2%, SPY +0.4%; riêng Dow Jones điều chỉnh nhẹ. Đà tăng 4 tuần vẫn nguyên vẹn."
+excerpt: "S&P 500 +0.40% trong tuần; Russell 2000 dẫn dắt (+1.17%); tính 4 tuần SPY +4.45%."
 ---
 ## Tổng quan
 
-Tuần giao dịch 10–14/08 khép lại với sắc xanh nhẹ trên diện rộng: nhóm tăng trưởng (QQQ) và vốn hóa nhỏ (IWM) dẫn dắt, trong khi Dow Jones là chỉ số duy nhất giảm. Đáng chú ý là thị trường vẫn giữ được toàn bộ thành quả của nhịp tăng mạnh 4 tuần qua — SPY đã tăng ~4.5% kể từ giữa tháng 7 và đang giao dịch sát vùng đỉnh. Thanh khoản tuần này thấp hơn trung bình, đặc trưng của giai đoạn giữa quý 3.
+Tuần giao dịch 10–14/08/2026 khép lại với thị trường tăng trên diện rộng dù chưa đồng thuận. Russell 2000 (IWM) tăng tốt nhất với +1.17%, trong khi DIA yếu nhất với −0.52%. Nhìn rộng hơn, S&P 500 (SPY) đã tăng +4.45% trong 4 tuần gần nhất và đang giao dịch sát vùng đỉnh 13 tuần. Thanh khoản chỉ đạt ~0.71× trung bình 4 tuần — biến động tuần này chưa được dòng tiền lớn xác nhận.
 
 ## Bảng chỉ số
 
-| Chỉ số (ETF) | Đóng tuần | % tuần | % 4 tuần | Nhận xét |
-|---|---:|---:|---:|---|
-| S&P 500 (SPY) | 776.34 | +0.40% | +4.45% | Đi ngang tích lũy sát đỉnh, biên độ hẹp |
-| NASDAQ-100 (QQQ) | 731.07 | +1.11% | +5.14% | Dẫn dắt, lấy lại toàn bộ nhịp giảm cuối tháng 7 |
-| Dow Jones (DIA) | 536.80 | −0.52% | +3.07% | Điều chỉnh nhẹ sau 2 tuần tăng |
-| Russell 2000 (IWM) | 305.09 | +1.17% | +3.76% | Vốn hóa nhỏ hồi phục tốt, tín hiệu độ rộng tích cực |
+| Chỉ số (ETF) | Đóng tuần | % tuần | % 4 tuần | KL/TB 4 tuần | Nhận xét |
+|---|---:|---:|---:|---:|---|
+| S&P 500 (SPDR S&P 500 ETF) | 776.34 | +0.40% | +4.45% | 0.73× | Tăng, giao dịch sát vùng đỉnh |
+| NASDAQ-100 (Invesco QQQ) | 731.07 | +1.11% | +5.14% | 0.70× | Hồi phục |
+| Dow Jones (SPDR Dow Jones ETF) | 536.80 | −0.52% | +3.07% | 0.70× | Điều chỉnh nhẹ |
+| Russell 2000 (iShares Russell 2000) | 305.09 | +1.17% | +3.76% | 0.71× | Tăng, giao dịch sát vùng đỉnh |
 
 ## Điểm nhấn
 
-- **Năng lượng bùng nổ**: XLE tăng +7.7% trong tuần — mức tăng ngành mạnh nhất, bỏ xa phần còn lại (chi tiết trong báo cáo dòng tiền ngành cùng kỳ).
-- **Độ rộng cải thiện**: vốn hóa nhỏ (IWM +1.2%) tăng tốt hơn SPY, cho thấy đà tăng không còn chỉ dựa vào nhóm vốn hóa lớn.
-- **Thanh khoản mỏng**: khối lượng SPY tuần này ~176 triệu đơn vị, thấp hơn đáng kể trung bình 4 tuần (~250 triệu) — đà tăng chưa được dòng tiền lớn xác nhận.
-- **Phiên đầu tuần mới (17/08)**: NVDA và INTC nằm trong nhóm cổ phiếu lớn giao dịch sôi động nhất; các chỉ số mở tuần mới gần như đi ngang.
+- **Ngành mạnh nhất**: Năng lượng (XLE) +7.67%; **yếu nhất**: Tiêu dùng không thiết yếu (XLY) −1.38% — chi tiết trong báo cáo dòng tiền ngành cùng kỳ.
+- **Độ rộng thị trường**: vốn hóa nhỏ (IWM +1.17%) tăng tốt hơn SPY — tín hiệu độ rộng tích cực.
+- **Thanh khoản**: Thanh khoản chỉ đạt ~0.71× trung bình 4 tuần — biến động tuần này chưa được dòng tiền lớn xác nhận.
 
 ## Tuần tới
 
-- Quan sát SPY quanh vùng 776–779: giữ được vùng này thì xu hướng tăng tiếp diễn; mất mốc 769 (đáy tuần) là tín hiệu điều chỉnh ngắn hạn đầu tiên.
-- QQQ đang ở vùng đỉnh 734 — nếu vượt qua với khối lượng cải thiện, nhóm công nghệ có thể kéo thị trường lên nấc mới.
-- Theo dõi liệu đà tăng của năng lượng có lan tỏa thành xu hướng luân chuyển bền vững hay chỉ là nhịp hồi kỹ thuật.
+- SPY: hỗ trợ gần nhất 769.20 (đáy tuần), kháng cự 779.37 (đỉnh tuần) — mất hỗ trợ là tín hiệu điều chỉnh ngắn hạn đầu tiên.
+- QQQ: quan sát vùng 715.50–734.39; vượt đỉnh tuần kèm khối lượng cải thiện sẽ mở dư địa tăng mới cho nhóm công nghệ.
+- Theo dõi liệu sức mạnh của Năng lượng (XLE) có duy trì sang tuần thứ hai để xác nhận xu hướng luân chuyển.

@@ -397,7 +397,14 @@ ${outflows.length ? `- **${outflows[0].symbol}**: đang bị rút tiền chủ �
         symbol,
         {
           name: names[symbol] ?? symbol,
-          series: rows.slice(-130).map((r) => ({ d: r.date, c: +r.close.toFixed(4) })),
+          series: rows.slice(-130).map((r) => ({
+            d: r.date,
+            o: +r.open.toFixed(4),
+            h: +r.high.toFixed(4),
+            l: +r.low.toFixed(4),
+            c: +r.close.toFixed(4),
+            v: Math.round(r.volume),
+          })),
         },
       ])
     ),

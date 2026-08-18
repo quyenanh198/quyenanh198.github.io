@@ -1,6 +1,7 @@
-// Instant ticker lookup for /lookup/.
-// Primary source: Yahoo Finance chart API fetched directly from the browser.
-// Fallback: /api/snapshot.json generated weekly for the site's tracked symbols.
+// Instant ticker lookup for /lookup/ with a TradingView-style candlestick
+// chart (lightweight-charts). Primary source: Yahoo Finance chart API
+// (10 years of daily OHLCV) fetched directly from the browser.
+// Fallback: /api/snapshot.json generated weekly for tracked symbols.
 (function () {
   "use strict";
 
@@ -8,6 +9,15 @@
   var input = document.getElementById("lookup-input");
   var result = document.getElementById("lookup-result");
   if (!form || !input || !result) return;
+
+  var RANGES = [
+    { key: "6mo", label: "6T", months: 6 },
+    { key: "1y", label: "1N", months: 12 },
+    { key: "2y", label: "2N", months: 24 },
+    { key: "5y", label: "5N", months: 60 },
+    { key: "10y", label: "10N", months: 120 },
+  ];
+  var DEFAULT_RANGE = "1y";
 
   var fmt = {
     price: function (x) {
@@ -34,6 +44,17 @@
     return s / n;
   }
 
+  // Full SMA series aligned with the input candles (null until enough data).
+  function smaSeries(candles, n) {
+    var out = [], sum = 0;
+    for (var i = 0; i < candles.length; i++) {
+      sum += candles[i].c;
+      if (i >= n) sum -= candles[i - n].c;
+      if (i >= n - 1) out.push({ time: candles[i].d, value: sum / n });
+    }
+    return out;
+  }
+
   function rsi(closes, n) {
     n = n || 14;
     if (closes.length < n + 1) return NaN;
@@ -57,13 +78,15 @@
   }
 
   // ---- Data sources ----
+  // Normalized series item: { d, o, h, l, c, v } (o/h/l/v may be missing on
+  // legacy snapshot data — the chart then falls back to a line series).
 
   function fetchYahoo(symbol) {
     var hosts = ["query1", "query2"];
     var attempt = function (idx) {
       if (idx >= hosts.length) return Promise.reject(new Error("yahoo unreachable"));
       var url = "https://" + hosts[idx] + ".finance.yahoo.com/v8/finance/chart/" +
-        encodeURIComponent(symbol) + "?interval=1d&range=6mo";
+        encodeURIComponent(symbol) + "?interval=1d&range=10y";
       return fetch(url).then(function (res) {
         if (!res.ok) throw new Error("HTTP " + res.status);
         return res.json();
@@ -74,9 +97,15 @@
         var series = [];
         for (var i = 0; i < r.timestamp.length; i++) {
           var c = q.close && q.close[i];
-          if (typeof c === "number" && isFinite(c)) {
-            series.push({ d: new Date(r.timestamp[i] * 1000).toISOString().slice(0, 10), c: c });
-          }
+          if (typeof c !== "number" || !isFinite(c)) continue;
+          series.push({
+            d: new Date(r.timestamp[i] * 1000).toISOString().slice(0, 10),
+            o: typeof q.open[i] === "number" ? q.open[i] : c,
+            h: typeof q.high[i] === "number" ? q.high[i] : c,
+            l: typeof q.low[i] === "number" ? q.low[i] : c,
+            c: c,
+            v: typeof q.volume[i] === "number" ? q.volume[i] : 0,
+          });
         }
         if (series.length < 30) throw new Error("series too short");
         var meta = r.meta || {};
@@ -111,7 +140,95 @@
     });
   }
 
-  // ---- Rendering ----
+  // ---- Chart (lightweight-charts) ----
+
+  var chart = null;
+
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function destroyChart() {
+    if (chart) {
+      try { chart.remove(); } catch (e) { /* already disposed */ }
+      chart = null;
+    }
+  }
+
+  function renderChart(el, series) {
+    if (!window.LightweightCharts) return false;
+    var hasOhlc = series.length && typeof series[0].o === "number";
+    var gain = cssVar("--gain") || "#1a7f4b";
+    var loss = cssVar("--loss") || "#c0392b";
+    var text = cssVar("--fg-muted") || "#6b6b6b";
+    var border = cssVar("--border") || "#e6e6e2";
+
+    chart = LightweightCharts.createChart(el, {
+      autoSize: true,
+      layout: {
+        background: { type: "solid", color: "transparent" },
+        textColor: text,
+        fontFamily: getComputedStyle(document.body).fontFamily,
+      },
+      grid: {
+        vertLines: { color: border },
+        horzLines: { color: border },
+      },
+      rightPriceScale: { borderColor: border },
+      timeScale: { borderColor: border, rightOffset: 3 },
+      crosshair: { mode: 0 },
+    });
+
+    if (hasOhlc) {
+      var candles = chart.addCandlestickSeries({
+        upColor: gain, downColor: loss,
+        borderUpColor: gain, borderDownColor: loss,
+        wickUpColor: gain, wickDownColor: loss,
+      });
+      candles.setData(series.map(function (p) {
+        return { time: p.d, open: p.o, high: p.h, low: p.l, close: p.c };
+      }));
+      var volume = chart.addHistogramSeries({
+        priceFormat: { type: "volume" },
+        priceScaleId: "",
+        lastValueVisible: false,
+        priceLineVisible: false,
+      });
+      volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+      volume.setData(series.map(function (p) {
+        return { time: p.d, value: p.v || 0, color: p.c >= p.o ? gain + "55" : loss + "55" };
+      }));
+    } else {
+      var line = chart.addLineSeries({ color: gain, lineWidth: 2 });
+      line.setData(series.map(function (p) { return { time: p.d, value: p.c }; }));
+    }
+
+    [{ n: 20, color: "#e6a23c" }, { n: 50, color: "#5b8def" }].forEach(function (m) {
+      if (series.length >= m.n) {
+        chart.addLineSeries({
+          color: m.color, lineWidth: 1,
+          priceLineVisible: false, lastValueVisible: false,
+          crosshairMarkerVisible: false,
+        }).setData(smaSeries(series, m.n));
+      }
+    });
+    return true;
+  }
+
+  function setRange(series, months) {
+    if (!chart || !series.length) return;
+    var last = series[series.length - 1].d;
+    var from = new Date(last + "T00:00:00Z");
+    from.setUTCMonth(from.getUTCMonth() - months);
+    var fromStr = from.toISOString().slice(0, 10);
+    var first = series[0].d;
+    chart.timeScale().setVisibleRange({
+      from: fromStr > first ? fromStr : first,
+      to: last,
+    });
+  }
+
+  // ---- Analysis & rendering ----
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (ch) {
@@ -119,49 +236,30 @@
     });
   }
 
-  function sparkline(series) {
-    var w = 640, h = 120, pad = 4;
-    var closes = series.map(function (p) { return p.c; });
-    var min = Math.min.apply(null, closes);
-    var max = Math.max.apply(null, closes);
-    var span = max - min || 1;
-    var pts = closes.map(function (c, i) {
-      var x = pad + (i / (closes.length - 1)) * (w - 2 * pad);
-      var y = h - pad - ((c - min) / span) * (h - 2 * pad);
-      return x.toFixed(1) + "," + y.toFixed(1);
-    });
-    var up = closes[closes.length - 1] >= closes[0];
-    return '<svg class="spark" viewBox="0 0 ' + w + " " + h + '" role="img" aria-label="Biểu đồ giá 6 tháng">' +
-      '<polyline fill="none" stroke="' + (up ? "var(--gain)" : "var(--loss)") + '" stroke-width="2" points="' + pts.join(" ") + '"/></svg>';
-  }
-
   function analyze(data) {
     var series = data.series;
     var closes = series.map(function (p) { return p.c; });
+    var recent = closes.slice(-260); // ~52 weeks
     var last = series[series.length - 1];
-    var prev = closes[closes.length - 2];
     var n = closes.length;
     var sma20v = sma(closes, 20);
     var sma50v = sma(closes, 50);
-    var rsi14 = rsi(closes, 14);
-    var close = last.c;
-    var trend = close > sma20v && sma20v > sma50v ? "up"
-      : close < sma20v && sma20v < sma50v ? "down" : "side";
-    var recent = closes.slice(-20);
+    var last20 = closes.slice(-20);
     return {
-      close: close,
+      close: last.c,
       date: last.d,
-      pctDay: pctChange(close, prev),
-      pct5: n > 5 ? pctChange(close, closes[n - 6]) : NaN,
-      pct21: n > 21 ? pctChange(close, closes[n - 22]) : NaN,
-      hi: Math.max.apply(null, closes),
-      lo: Math.min.apply(null, closes),
-      support: Math.min.apply(null, recent),
-      resist: Math.max.apply(null, recent),
+      pctDay: pctChange(last.c, closes[n - 2]),
+      pct5: n > 5 ? pctChange(last.c, closes[n - 6]) : NaN,
+      pct21: n > 21 ? pctChange(last.c, closes[n - 22]) : NaN,
+      hi52: Math.max.apply(null, recent),
+      lo52: Math.min.apply(null, recent),
+      support: Math.min.apply(null, last20),
+      resist: Math.max.apply(null, last20),
       sma20: sma20v,
       sma50: sma50v,
-      rsi14: rsi14,
-      trend: trend,
+      rsi14: rsi(closes.slice(-120), 14),
+      trend: last.c > sma20v && sma20v > sma50v ? "up"
+        : last.c < sma20v && sma20v < sma50v ? "down" : "side",
     };
   }
 
@@ -184,9 +282,15 @@
   }
 
   function render(symbol, data) {
+    destroyChart();
     var a = analyze(data);
     var t = trendLabel(a);
     var dayCls = a.pctDay >= 0 ? "gain" : "loss";
+    var rangeButtons = RANGES.map(function (r) {
+      return '<button type="button" class="range-btn' + (r.key === DEFAULT_RANGE ? " active" : "") +
+        '" data-months="' + r.months + '">' + r.label + "</button>";
+    }).join("");
+
     result.innerHTML =
       '<div class="lookup-card">' +
       '<div class="lookup-head"><span class="lookup-symbol">' + esc(symbol) + "</span> " +
@@ -194,10 +298,12 @@
       '<div class="lookup-price"><strong>' + fmt.price(a.close) + "</strong> " + esc(data.currency) +
       ' <span class="' + dayCls + '">' + fmt.pct(a.pctDay) + "</span>" +
       ' <span class="lookup-date">phiên ' + fmt.date(a.date) + "</span></div>" +
-      sparkline(data.series) +
+      '<div class="range-bar" role="group" aria-label="Khung thời gian">' + rangeButtons + "</div>" +
+      '<div id="lookup-chart" class="lookup-chart"></div>' +
+      '<p class="chart-legend"><span style="color:#e6a23c">— SMA20</span> <span style="color:#5b8def">— SMA50</span></p>' +
       '<table class="lookup-table"><tbody>' +
       "<tr><th>1 tuần / 1 tháng</th><td><span class=\"" + (a.pct5 >= 0 ? "gain" : "loss") + '">' + fmt.pct(a.pct5) + "</span> / <span class=\"" + (a.pct21 >= 0 ? "gain" : "loss") + '">' + fmt.pct(a.pct21) + "</span></td></tr>" +
-      "<tr><th>Biên độ 6 tháng</th><td>" + fmt.price(a.lo) + " – " + fmt.price(a.hi) + "</td></tr>" +
+      "<tr><th>Biên độ 52 tuần</th><td>" + fmt.price(a.lo52) + " – " + fmt.price(a.hi52) + "</td></tr>" +
       "<tr><th>Hỗ trợ / kháng cự (20 phiên)</th><td>" + fmt.price(a.support) + " / " + fmt.price(a.resist) + "</td></tr>" +
       "<tr><th>RSI(14)</th><td>" + rsiLabel(a.rsi14) + "</td></tr>" +
       "</tbody></table>" +
@@ -205,14 +311,31 @@
       '<p class="lookup-source">Nguồn: ' + esc(data.source) + "</p>" +
       "</div>";
     result.hidden = false;
+
+    var chartEl = document.getElementById("lookup-chart");
+    var drawn = renderChart(chartEl, data.series);
+    if (drawn) {
+      var def = RANGES.filter(function (r) { return r.key === DEFAULT_RANGE; })[0];
+      setRange(data.series, def.months);
+      Array.prototype.forEach.call(result.querySelectorAll(".range-btn"), function (btn) {
+        btn.addEventListener("click", function () {
+          Array.prototype.forEach.call(result.querySelectorAll(".range-btn"), function (b) {
+            b.classList.remove("active");
+          });
+          btn.classList.add("active");
+          setRange(data.series, Number(btn.getAttribute("data-months")));
+        });
+      });
+    } else {
+      chartEl.innerHTML = '<p class="lookup-name">Không tải được thư viện biểu đồ — hiển thị số liệu dạng bảng bên dưới.</p>';
+    }
   }
 
-  function renderError(symbol, hadSnapshotMiss) {
+  function renderError(symbol) {
+    destroyChart();
     result.innerHTML =
-      '<div class="lookup-card lookup-error"><p>Không lấy được dữ liệu cho <strong>' + esc(symbol) + "</strong>." +
-      (hadSnapshotMiss
-        ? " Kiểm tra lại mã (chỉ hỗ trợ cổ phiếu/ETF Mỹ, ví dụ AAPL, MSFT, SPY), hoặc thử lại sau."
-        : "") + "</p></div>";
+      '<div class="lookup-card lookup-error"><p>Không lấy được dữ liệu cho <strong>' + esc(symbol) +
+      "</strong>. Kiểm tra lại mã (chỉ hỗ trợ cổ phiếu/ETF Mỹ, ví dụ AAPL, MSFT, SPY), hoặc thử lại sau.</p></div>";
     result.hidden = false;
   }
 
@@ -226,7 +349,7 @@
     var symbol = rawSymbol.trim().toUpperCase();
     if (!symbol || busy) return;
     if (!/^[A-Z0-9.^=-]{1,12}$/.test(symbol)) {
-      renderError(symbol, true);
+      renderError(symbol);
       return;
     }
     busy = true;
@@ -234,7 +357,7 @@
     fetchYahoo(symbol)
       .catch(function () { return fetchSnapshot(symbol); })
       .then(function (data) { render(symbol, data); })
-      .catch(function () { renderError(symbol, true); })
+      .catch(function () { renderError(symbol); })
       .then(function () { busy = false; });
   }
 

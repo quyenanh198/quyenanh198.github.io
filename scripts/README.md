@@ -1,5 +1,9 @@
 # Hệ thống báo cáo thị trường tự động
 
+> Tài liệu tổng quan toàn dự án (kiến trúc, cấu trúc repo, trang tra cứu, worker):
+> xem [README gốc](../README.md). Worker dữ liệu cho `/lookup/`: xem
+> [workers/README.md](../workers/README.md).
+
 Toàn bộ pipeline chạy tự động bằng GitHub Actions — không cần API key, không cần can thiệp thủ công.
 
 ## Cách hoạt động
@@ -13,9 +17,11 @@ GitHub Actions (cron)
        │  dòng tiền (giá × khối lượng so trung bình), khoảng cách đỉnh 13 tuần…
        ├─ tính chỉ báo kỹ thuật: SMA 20/50/200, RSI(14), MACD(12,26,9), ATR(14)
        ├─ sinh báo cáo markdown tiếng Việt vào src/reports/
-       └─ viết bài phân tích tổng hợp vào src/posts/ → hiện trên Blog
-          (xu hướng, động lượng, vùng mua / dừng lỗ / chốt lời tham khảo cho từng mã)
-  └─ commit báo cáo + bài viết mới vào master
+       ├─ viết bài phân tích tổng hợp vào src/posts/ → hiện trên Blog
+       │  (xu hướng, động lượng, vùng mua / dừng lỗ / chốt lời tham khảo cho từng mã)
+       └─ sinh src/api/snapshot.json — OHLCV 130 phiên cho toàn bộ watchlist,
+          làm dữ liệu dự phòng cho trang tra cứu /lookup/
+  └─ commit báo cáo + bài viết + snapshot mới vào master
   └─ npm run build (Eleventy) → deploy GitHub Pages
 ```
 

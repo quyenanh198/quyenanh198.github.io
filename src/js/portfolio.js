@@ -154,6 +154,8 @@
         years: Number(document.getElementById("pf-years").value) || 30,
         dca: Number(document.getElementById("pf-dca").value) || 0,
         drip: document.getElementById("pf-drip").checked,
+        inflAdj: document.getElementById("pf-infl-adj").checked,
+        infl: Number(document.getElementById("pf-infl").value),
         g: {
           weak: Number(document.getElementById("g-weak").value),
           avg: Number(document.getElementById("g-avg").value),
@@ -170,6 +172,8 @@
       saved.rows.forEach(function (r) { addRow(r.symbol, r.amount); });
       if (saved.years) document.getElementById("pf-years").value = saved.years;
       if (isFinite(saved.dca)) document.getElementById("pf-dca").value = saved.dca;
+      if (typeof saved.inflAdj === "boolean") document.getElementById("pf-infl-adj").checked = saved.inflAdj;
+      if (isFinite(saved.infl)) document.getElementById("pf-infl").value = saved.infl;
       if (typeof saved.drip === "boolean") document.getElementById("pf-drip").checked = saved.drip;
       if (saved.g) {
         if (isFinite(saved.g.weak)) document.getElementById("g-weak").value = saved.g.weak;
@@ -243,6 +247,13 @@
     var years = Math.min(50, Math.max(5, Number(document.getElementById("pf-years").value) || 30));
     var dca = Math.max(0, Number(document.getElementById("pf-dca").value) || 0);
     var drip = document.getElementById("pf-drip").checked;
+    var inflAdj = document.getElementById("pf-infl-adj").checked;
+    var infl = Math.max(0, Number(document.getElementById("pf-infl").value) || 0);
+    // Real (inflation-adjusted) growth: (1+g)/(1+π) − 1. DCA stays constant
+    // in today's purchasing power (nominal contributions rise with inflation).
+    var adjG = function (gPct) {
+      return inflAdj ? (((1 + gPct / 100) / (1 + infl / 100)) - 1) * 100 : gPct;
+    };
     var gWeak = Number(document.getElementById("g-weak").value);
     var gAvg = Number(document.getElementById("g-avg").value);
     var gStrong = Number(document.getElementById("g-strong").value);
@@ -282,7 +293,7 @@
         { key: "strong", label: "Mạnh (" + gStrong + "%/năm)", color: gain, g: gStrong },
       ];
       scenarios.forEach(function (sc) {
-        sc.data = project(invested, portYield, sc.g, years, drip, dca);
+        sc.data = project(invested, portYield, adjG(sc.g), years, drip, dca);
       });
 
       // Per-ticker breakdown
@@ -327,7 +338,11 @@
             '<br><span class="pf-sub">Kiểm tra lại mã (đúng như trên Yahoo Finance). Cổ phiếu ngoài thị trường Mỹ cần hậu tố sàn — ví dụ INTP.JK (Indonesia), 7203.T (Nhật), 0700.HK (Hồng Kông). Nếu bạn định nhập Intel, mã đúng là INTC.</span>'
           : "") +
         "</p>" +
-        "<h2>Giá trị danh mục " + years + " năm tới " + (drip ? "(tái đầu tư cổ tức)" : "(nhận cổ tức bằng tiền)") + "</h2>" +
+        "<h2>Giá trị danh mục " + years + " năm tới " + (drip ? "(tái đầu tư cổ tức)" : "(nhận cổ tức bằng tiền)") +
+        (inflAdj ? " — theo sức mua hôm nay, đã trừ lạm phát " + infl + "%/năm" : "") + "</h2>" +
+        (inflAdj
+          ? '<p class="pf-sub">Mọi con số bên dưới (giá trị, cổ tức, vốn góp) đều tính theo giá trị thực — tức sức mua tương đương ngày hôm nay. Khoản DCA được giả định tăng danh nghĩa theo lạm phát để giữ nguyên sức mua ' + fmtMoney(dca) + "/tháng.</p>"
+          : "") +
         '<div id="pf-chart" class="lookup-chart"></div>' +
         '<p class="chart-legend">' + scenarios.map(function (sc) {
           return '<span style="color:' + sc.color + '">— ' + sc.label + "</span> ";

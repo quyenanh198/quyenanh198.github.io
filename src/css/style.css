@@ -713,6 +713,58 @@ button.lookup-chip:hover {
   max-width: 200px;
 }
 
+.pf-alloc {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 28px;
+  margin: 10px 0 6px;
+}
+
+.pf-donut {
+  width: 200px;
+  height: 200px;
+  flex: none;
+}
+
+.pf-alloc-legend {
+  flex: 1;
+  min-width: 240px;
+}
+
+.pf-alloc-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9em;
+}
+
+.pf-alloc-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+  align-self: center;
+}
+
+.pf-alloc-sym {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pf-alloc-pct {
+  font-weight: 600;
+  min-width: 52px;
+  text-align: right;
+}
+
 .pf-divgrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));

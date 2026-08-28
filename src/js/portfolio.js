@@ -304,7 +304,90 @@
     chart.timeScale().fitContent();
   }
 
-  // ---- Per-ticker dividend detail box ----
+  // ---- Allocation donut (SVG, theme-aware, palette validated for both modes) ----
+
+  var PALETTE_LIGHT = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"];
+  var PALETTE_DARK = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
+
+  function pickPalette() {
+    var attr = document.documentElement.getAttribute("data-theme");
+    var dark = attr === "dark" ||
+      (attr !== "light" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    return dark ? PALETTE_DARK : PALETTE_LIGHT;
+  }
+
+  function arcPath(cx, cy, r1, r2, a0, a1) {
+    var large = a1 - a0 > Math.PI ? 1 : 0;
+    var pt = function (r, a) {
+      return (cx + r * Math.cos(a)).toFixed(2) + "," + (cy + r * Math.sin(a)).toFixed(2);
+    };
+    return "M" + pt(r2, a0) + " A" + r2 + "," + r2 + " 0 " + large + " 1 " + pt(r2, a1) +
+      " L" + pt(r1, a1) + " A" + r1 + "," + r1 + " 0 " + large + " 0 " + pt(r1, a0) + " Z";
+  }
+
+  // items: [{label, value}] sorted desc; >8 folds into "Khác".
+  function allocationSection(items, total) {
+    var palette = pickPalette();
+    var shown = items.slice(0, 7);
+    var rest = items.slice(7);
+    if (rest.length) {
+      shown.push({
+        label: "Khác (" + rest.map(function (r) { return r.label; }).join(", ") + ")",
+        value: rest.reduce(function (s, r) { return s + r.value; }, 0),
+        other: true,
+      });
+    }
+    shown.forEach(function (it, i) {
+      it.color = it.other ? "#8a8a92" : palette[i];
+      it.pct = (it.value / total) * 100;
+    });
+
+    var cx = 90, cy = 90, r1 = 52, r2 = 86;
+    var a = -Math.PI / 2;
+    var paths = shown.map(function (it) {
+      var span = Math.max(0.0001, (it.value / total) * Math.PI * 2);
+      var seg = it.pct >= 99.99
+        // full circle: draw as two halves so the arc renders
+        ? arcPath(cx, cy, r1, r2, a, a + Math.PI) + " " + arcPath(cx, cy, r1, r2, a + Math.PI, a + Math.PI * 2)
+        : arcPath(cx, cy, r1, r2, a, a + span);
+      a += span;
+      return '<path d="' + seg + '" fill="' + it.color + '" stroke="var(--bg-subtle)" stroke-width="2">' +
+        "<title>" + esc(it.label) + ": " + it.pct.toFixed(1) + "% (" + fmtMoney(it.value) + ")</title></path>";
+    }).join("");
+
+    var legend = shown.map(function (it) {
+      return '<div class="pf-alloc-row"><span class="pf-alloc-dot" style="background:' + it.color + '"></span>' +
+        '<span class="pf-alloc-sym">' + esc(it.label) + "</span>" +
+        '<span class="pf-alloc-pct">' + it.pct.toFixed(1) + "%</span>" +
+        '<span class="pf-sub">' + fmtMoney(it.value) + "</span></div>";
+    }).join("");
+
+    return '<div class="pf-alloc">' +
+      '<svg viewBox="0 0 180 180" class="pf-donut" role="img" aria-label="Phân bổ tỷ trọng danh mục">' + paths +
+      '<text x="90" y="86" text-anchor="middle" fill="var(--fg)" font-size="15" font-weight="600">' + fmtMoney(total) + "</text>" +
+      '<text x="90" y="104" text-anchor="middle" fill="var(--fg-muted)" font-size="10">tổng đầu tư</text>' +
+      "</svg>" +
+      '<div class="pf-alloc-legend">' + legend + "</div></div>";
+  }
+
+  // Allocation drift under DRIP: with a shared growth assumption, weights shift
+  // only because yields differ (and DCA buys at the initial weights) — so the
+  // drift is scenario-independent.
+  function allocationDrift(ok, invested, years, dca, gPct, milestones) {
+    var gm = Math.pow(1 + gPct / 100, 1 / 12) - 1;
+    var vals = ok.map(function (t) { return t.amount; });
+    var w0 = ok.map(function (t) { return t.amount / invested; });
+    var snaps = { 0: vals.slice() };
+    for (var y = 1; y <= years; y++) {
+      for (var m = 0; m < 12; m++) {
+        for (var i = 0; i < ok.length; i++) {
+          vals[i] = vals[i] * (1 + ok[i].yield / 12) * (1 + gm) + dca * w0[i];
+        }
+      }
+      if (milestones.indexOf(y) >= 0) snaps[y] = vals.slice();
+    }
+    return snaps;
+  }
 
   var fmtDate = function (unix) {
     var d = new Date(unix * 1000);
@@ -409,6 +492,26 @@
         sc.data = project(invested, portYield, adjG(sc.g), years, drip, dca);
       });
 
+      // Allocation drift table (DRIP only, >1 ticker)
+      var driftHtml = "";
+      if (drip && ok.length > 1) {
+        var driftMs = [10, 20, years].filter(function (y, i2, arr) { return y <= years && arr.indexOf(y) === i2; });
+        var snaps = allocationDrift(ok, invested, years, dca, gAvg, driftMs);
+        var totalAt = function (arr) { return arr.reduce(function (s, x) { return s + x; }, 0); };
+        var driftRows = ok.map(function (t, i2) {
+          return "<tr><th>" + esc(t.symbol) + "</th><td>" + ((t.amount / invested) * 100).toFixed(1) + "%</td>" +
+            driftMs.map(function (y) {
+              var arr = snaps[y];
+              return "<td>" + ((arr[i2] / totalAt(arr)) * 100).toFixed(1) + "%</td>";
+            }).join("") + "</tr>";
+        }).join("");
+        driftHtml = "<h2>Tỷ trọng thay đổi theo thời gian (khi DRIP)</h2>" +
+          '<table class="lookup-table tf-table"><thead><tr><th>Mã</th><th>Hiện tại</th>' +
+          driftMs.map(function (y) { return "<th>Năm " + y + "</th>"; }).join("") +
+          "</tr></thead><tbody>" + driftRows + "</tbody></table>" +
+          '<p class="pf-sub">Khi tái đầu tư cổ tức, mã có tỷ suất cổ tức cao hơn tự mua thêm nhiều cổ phiếu hơn nên tỷ trọng tăng dần; DCA được giả định mua theo tỷ trọng ban đầu. Sự dịch chuyển này gần như không phụ thuộc kịch bản tăng trưởng vì các mã dùng chung giả định tăng giá.</p>';
+      }
+
       // Per-ticker breakdown
       var tickerRows = ok.map(function (t) {
         return "<tr><th>" + esc(t.symbol) + "</th><td>" + esc(t.name) + "</td><td>" + fmtMoney2(t.price) +
@@ -451,6 +554,13 @@
             '<br><span class="pf-sub">Kiểm tra lại mã (đúng như trên Yahoo Finance). Cổ phiếu ngoài thị trường Mỹ cần hậu tố sàn — ví dụ INTP.JK (Indonesia), 7203.T (Nhật), 0700.HK (Hồng Kông). Nếu bạn định nhập Intel, mã đúng là INTC.</span>'
           : "") +
         "</p>" +
+        "<h2>Phân bổ tỷ trọng</h2>" +
+        allocationSection(
+          ok.map(function (t) { return { label: t.symbol, value: t.amount }; })
+            .sort(function (x, y) { return y.value - x.value; }),
+          invested
+        ) +
+        driftHtml +
         "<h2>Giá trị danh mục " + years + " năm tới " + (drip ? "(tái đầu tư cổ tức)" : "(nhận cổ tức bằng tiền)") +
         (inflAdj ? " — theo sức mua hôm nay, đã trừ lạm phát " + infl + "%/năm" : "") + "</h2>" +
         (inflAdj

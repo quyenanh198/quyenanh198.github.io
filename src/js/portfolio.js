@@ -72,24 +72,30 @@
         }
         if (!isFinite(lastClose)) throw new Error("no price");
         var yearAgo = lastTs - 365 * 86400;
-        var ttmDiv = 0, payments = 0;
+        var twoYearsAgo = lastTs - 730 * 86400;
         var divsObj = r.events && r.events.dividends;
+        var divHistory = [];
         if (divsObj) {
           Object.keys(divsObj).forEach(function (k) {
             var d = divsObj[k];
-            if (isFinite(d.amount) && (d.date || 0) >= yearAgo) {
-              ttmDiv += d.amount;
-              payments++;
-            }
+            if (isFinite(d.amount) && d.date) divHistory.push({ date: d.date, amount: d.amount });
           });
+          divHistory.sort(function (a, b) { return b.date - a.date; });
         }
+        var ttmDiv = 0, payments = 0, prevTtmDiv = 0;
+        divHistory.forEach(function (d) {
+          if (d.date >= yearAgo) { ttmDiv += d.amount; payments++; }
+          else if (d.date >= twoYearsAgo) prevTtmDiv += d.amount;
+        });
         var meta = r.meta || {};
         return {
           symbol: symbol,
           name: meta.longName || meta.shortName || symbol,
           price: lastClose,
           ttmDivPerShare: ttmDiv,
+          prevTtmDivPerShare: prevTtmDiv,
           payments: payments,
+          divHistory: divHistory,
           yield: ttmDiv / lastClose,
         };
       }).catch(function () { return attempt(idx + 1); });
@@ -147,44 +153,108 @@
     return rows;
   }
 
+  function snapshotState() {
+    return {
+      rows: readPortfolio(),
+      years: Number(document.getElementById("pf-years").value) || 30,
+      dca: Number(document.getElementById("pf-dca").value) || 0,
+      drip: document.getElementById("pf-drip").checked,
+      inflAdj: document.getElementById("pf-infl-adj").checked,
+      infl: Number(document.getElementById("pf-infl").value),
+      g: {
+        weak: Number(document.getElementById("g-weak").value),
+        avg: Number(document.getElementById("g-avg").value),
+        strong: Number(document.getElementById("g-strong").value),
+      },
+    };
+  }
+
+  function applyState(saved) {
+    while (rowsBody.firstChild) rowsBody.removeChild(rowsBody.firstChild);
+    (saved.rows || []).forEach(function (r) { addRow(r.symbol, r.amount); });
+    if (!rowsBody.firstChild) addRow("", "");
+    if (saved.years) document.getElementById("pf-years").value = saved.years;
+    if (isFinite(saved.dca)) document.getElementById("pf-dca").value = saved.dca;
+    if (typeof saved.inflAdj === "boolean") document.getElementById("pf-infl-adj").checked = saved.inflAdj;
+    if (isFinite(saved.infl)) document.getElementById("pf-infl").value = saved.infl;
+    if (typeof saved.drip === "boolean") document.getElementById("pf-drip").checked = saved.drip;
+    if (saved.g) {
+      if (isFinite(saved.g.weak)) document.getElementById("g-weak").value = saved.g.weak;
+      if (isFinite(saved.g.avg)) document.getElementById("g-avg").value = saved.g.avg;
+      if (isFinite(saved.g.strong)) document.getElementById("g-strong").value = saved.g.strong;
+    }
+  }
+
   function savePortfolio() {
-    try {
-      localStorage.setItem("pfPortfolio", JSON.stringify({
-        rows: readPortfolio(),
-        years: Number(document.getElementById("pf-years").value) || 30,
-        dca: Number(document.getElementById("pf-dca").value) || 0,
-        drip: document.getElementById("pf-drip").checked,
-        inflAdj: document.getElementById("pf-infl-adj").checked,
-        infl: Number(document.getElementById("pf-infl").value),
-        g: {
-          weak: Number(document.getElementById("g-weak").value),
-          avg: Number(document.getElementById("g-avg").value),
-          strong: Number(document.getElementById("g-strong").value),
-        },
-      }));
-    } catch (e) { /* ignore */ }
+    try { localStorage.setItem("pfPortfolio", JSON.stringify(snapshotState())); } catch (e) { /* ignore */ }
   }
 
   function loadPortfolio() {
     var saved = null;
     try { saved = JSON.parse(localStorage.getItem("pfPortfolio") || "null"); } catch (e) { /* ignore */ }
     if (saved && saved.rows && saved.rows.length) {
-      saved.rows.forEach(function (r) { addRow(r.symbol, r.amount); });
-      if (saved.years) document.getElementById("pf-years").value = saved.years;
-      if (isFinite(saved.dca)) document.getElementById("pf-dca").value = saved.dca;
-      if (typeof saved.inflAdj === "boolean") document.getElementById("pf-infl-adj").checked = saved.inflAdj;
-      if (isFinite(saved.infl)) document.getElementById("pf-infl").value = saved.infl;
-      if (typeof saved.drip === "boolean") document.getElementById("pf-drip").checked = saved.drip;
-      if (saved.g) {
-        if (isFinite(saved.g.weak)) document.getElementById("g-weak").value = saved.g.weak;
-        if (isFinite(saved.g.avg)) document.getElementById("g-avg").value = saved.g.avg;
-        if (isFinite(saved.g.strong)) document.getElementById("g-strong").value = saved.g.strong;
-      }
+      applyState(saved);
     } else {
       addRow("VOO", 10000);
       addRow("SCHD", 10000);
       addRow("", "");
     }
+  }
+
+  // ---- Named portfolio lists (localStorage) ----
+
+  function savedLists() {
+    try { return JSON.parse(localStorage.getItem("pfSavedLists") || "{}") || {}; } catch (e) { return {}; }
+  }
+
+  function writeSavedLists(lists) {
+    try { localStorage.setItem("pfSavedLists", JSON.stringify(lists)); } catch (e) { /* ignore */ }
+  }
+
+  function refreshSavedSelect() {
+    var sel = document.getElementById("pf-saved");
+    if (!sel) return;
+    var lists = savedLists();
+    var names = Object.keys(lists).sort();
+    sel.innerHTML = names.length
+      ? names.map(function (n) { return "<option>" + esc(n) + "</option>"; }).join("")
+      : '<option value="">(chưa có danh mục nào)</option>';
+    sel.disabled = !names.length;
+  }
+
+  function initSavedListsUI() {
+    var sel = document.getElementById("pf-saved");
+    var nameInput = document.getElementById("pf-name");
+    var saveBtn = document.getElementById("pf-save");
+    var loadBtn = document.getElementById("pf-load");
+    var delBtn = document.getElementById("pf-delete");
+    if (!sel || !saveBtn) return;
+    refreshSavedSelect();
+    saveBtn.addEventListener("click", function () {
+      var name = (nameInput.value || sel.value || "").trim();
+      if (!name) { nameInput.focus(); nameInput.placeholder = "Nhập tên trước khi lưu"; return; }
+      var lists = savedLists();
+      lists[name] = snapshotState();
+      writeSavedLists(lists);
+      refreshSavedSelect();
+      sel.value = name;
+      nameInput.value = "";
+    });
+    loadBtn.addEventListener("click", function () {
+      var lists = savedLists();
+      if (sel.value && lists[sel.value]) {
+        applyState(lists[sel.value]);
+        savePortfolio();
+      }
+    });
+    delBtn.addEventListener("click", function () {
+      var lists = savedLists();
+      if (sel.value && lists[sel.value]) {
+        delete lists[sel.value];
+        writeSavedLists(lists);
+        refreshSavedSelect();
+      }
+    });
   }
 
   // ---- Chart ----
@@ -232,6 +302,49 @@
       }));
     }
     chart.timeScale().fitContent();
+  }
+
+  // ---- Per-ticker dividend detail box ----
+
+  var fmtDate = function (unix) {
+    var d = new Date(unix * 1000);
+    var p = function (x) { return x < 10 ? "0" + x : x; };
+    return p(d.getUTCDate()) + "/" + p(d.getUTCMonth() + 1) + "/" + d.getUTCFullYear();
+  };
+
+  function freqLabel(n) {
+    if (n >= 11) return "hằng tháng";
+    if (n >= 4) return "hằng quý";
+    if (n >= 2) return "nửa năm/lần";
+    if (n >= 1) return "mỗi năm";
+    return "—";
+  }
+
+  function dividendBox(t) {
+    var head = '<div class="pf-divbox"><div class="lookup-head"><span class="lookup-symbol">' +
+      esc(t.symbol) + "</span> " + '<span class="lookup-name">' + esc(t.name) + "</span></div>";
+    if (!t.divHistory.length || t.ttmDivPerShare <= 0) {
+      return head + '<p class="pf-sub">Không chi trả cổ tức trong 2 năm gần nhất — lợi nhuận (nếu có) đến từ tăng giá.</p></div>';
+    }
+    var growth = t.prevTtmDivPerShare > 0
+      ? ((t.ttmDivPerShare / t.prevTtmDivPerShare - 1) * 100)
+      : NaN;
+    var histRows = t.divHistory.slice(0, 8).map(function (d) {
+      return "<tr><td>" + fmtDate(d.date) + "</td><td>" + fmtMoney2(d.amount) + "</td><td>" +
+        fmtMoney2(d.amount * t.shares) + "</td></tr>";
+    }).join("");
+    return head +
+      '<table class="lookup-table"><tbody>' +
+      "<tr><th>Tỷ suất cổ tức (TTM)</th><td>" + (t.yield * 100).toFixed(2) + "%</td></tr>" +
+      "<tr><th>Tần suất chi trả</th><td>" + freqLabel(t.payments) + " (" + t.payments + " đợt/12 tháng)</td></tr>" +
+      "<tr><th>Cổ tức/CP 12 tháng</th><td>" + fmtMoney2(t.ttmDivPerShare) +
+      (isFinite(growth) ? ' <span class="' + (growth >= 0 ? "gain" : "loss") + '">(' + (growth >= 0 ? "+" : "−") + Math.abs(growth).toFixed(1) + "% so với năm trước)</span>" : "") + "</td></tr>" +
+      "<tr><th>Bạn nhận (với " + t.shares.toFixed(2) + " CP)</th><td><strong>" + fmtMoney2(t.divYear1) +
+      "/năm</strong> ≈ " + fmtMoney2(t.divYear1 / 12) + "/tháng</td></tr>" +
+      "</tbody></table>" +
+      '<p class="pf-sub">Các đợt chi trả gần nhất (ngày không hưởng quyền · $/CP · bạn nhận):</p>' +
+      '<table class="lookup-table pf-hist"><tbody>' + histRows + "</tbody></table>" +
+      "</div>";
   }
 
   // ---- Run ----
@@ -352,6 +465,8 @@
         (drip
           ? "<p>Với DRIP, cổ tức mỗi năm được mua thêm cổ phiếu nên tổng tăng trưởng ≈ tăng giá + tỷ suất cổ tức, lãi kép theo cả hai kênh.</p>"
           : "<p>Không tái đầu tư: giá trị danh mục chỉ tăng theo giá; dòng cổ tức nhận bằng tiền được cộng dồn ở mục “Đã nhận lũy kế”.</p>") +
+        "<h2>Chi tiết cổ tức từng mã</h2>" +
+        '<div class="pf-divgrid">' + ok.map(dividendBox).join("") + "</div>" +
         "</div>";
       drawChart(document.getElementById("pf-chart"), scenarios, dca > 0 ? scenarios[0].data : null);
     });
@@ -360,4 +475,5 @@
   addBtn.addEventListener("click", function () { addRow("", ""); });
   runBtn.addEventListener("click", run);
   loadPortfolio();
+  initSavedListsUI();
 })();

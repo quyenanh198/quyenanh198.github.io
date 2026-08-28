@@ -701,6 +701,40 @@ button.lookup-chip:hover {
   font-size: 0.82em;
 }
 
+.pf-options select,
+.pf-options input[type="text"] {
+  font: inherit;
+  font-size: 0.9em;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  max-width: 200px;
+}
+
+.pf-divgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.pf-divbox {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: var(--bg);
+}
+
+.pf-divbox .lookup-table {
+  font-size: 0.85em;
+}
+
+.pf-hist td {
+  white-space: nowrap;
+}
+
 .social-links {
   list-style: none;
   padding: 0;

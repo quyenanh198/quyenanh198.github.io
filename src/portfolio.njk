@@ -1,0 +1,45 @@
+---
+layout: base.njk
+title: Portfolio 30 năm
+permalink: /portfolio/
+---
+<h1>Mô phỏng danh mục 30 năm</h1>
+<p class="lede">Nhập danh mục của bạn để xem giá trị dự phóng trong tương lai theo 3 kịch bản kinh tế, kèm cổ tức nhận được mỗi tháng/mỗi năm (dữ liệu cổ tức thật của từng mã) và tùy chọn tái đầu tư cổ tức.</p>
+
+<div class="lookup-card">
+  <table class="pf-table" id="pf-rows">
+    <thead><tr><th>Mã</th><th>Số tiền đầu tư ($)</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <div class="range-bar">
+    <button type="button" class="range-btn" id="pf-add">+ Thêm mã</button>
+  </div>
+
+  <div class="pf-options">
+    <label>Số năm dự phóng
+      <input type="number" id="pf-years" min="5" max="50" step="5" value="30">
+    </label>
+    <label class="pf-check">
+      <input type="checkbox" id="pf-drip" checked> Tái đầu tư cổ tức (DRIP)
+    </label>
+  </div>
+
+  <div class="pf-options">
+    <span class="set-label">Tăng trưởng giá %/năm theo kịch bản:</span>
+    <label>Yếu <input type="number" id="g-weak" step="0.5" value="4"></label>
+    <label>Trung bình <input type="number" id="g-avg" step="0.5" value="7"></label>
+    <label>Mạnh <input type="number" id="g-strong" step="0.5" value="10"></label>
+  </div>
+
+  <div class="range-bar">
+    <button type="button" class="range-btn active" id="pf-run">Tính toán</button>
+  </div>
+</div>
+
+<div id="pf-result" hidden></div>
+
+<p class="report-disclaimer">Mô phỏng dùng giả định đơn giản hóa: giá tăng đều theo kịch bản, tỷ suất cổ tức giữ nguyên theo giá trị danh mục (cổ tức tăng cùng nhịp với giá), chưa tính thuế/phí/lạm phát. Kết quả chỉ mang tính minh họa — không phải dự báo hay khuyến nghị đầu tư.</p>
+
+<script>window.MARKET_PROXY = "{{ site.marketProxy }}";</script>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js" defer></script>
+<script src="/js/portfolio.js?v={{ assetVersion }}" defer></script>

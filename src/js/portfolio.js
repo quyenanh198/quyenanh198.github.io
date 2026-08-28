@@ -128,11 +128,12 @@
 
   // ---- Portfolio rows UI ----
 
-  function addRow(symbol, amount) {
+  function addRow(symbol, amount, target) {
     var tr = document.createElement("tr");
     tr.innerHTML =
       '<td><input type="text" class="pf-sym" maxlength="12" spellcheck="false" placeholder="VD: AAPL" value="' + esc(symbol || "") + '"></td>' +
       '<td><input type="number" class="pf-amt" min="0" step="100" placeholder="10000" value="' + (amount || "") + '"></td>' +
+      '<td><input type="number" class="pf-tgt" min="0" max="100" step="1" placeholder="tự chia" value="' + (isFinite(target) && target !== "" && target !== null ? target : "") + '"></td>' +
       '<td><button type="button" class="range-btn pf-del">✕</button></td>';
     tr.querySelector(".pf-del").addEventListener("click", function () {
       tr.parentNode.removeChild(tr);
@@ -146,8 +147,10 @@
     Array.prototype.forEach.call(rowsBody.querySelectorAll("tr"), function (tr) {
       var sym = tr.querySelector(".pf-sym").value.trim().toUpperCase();
       var amt = Number(tr.querySelector(".pf-amt").value);
+      var tgtRaw = tr.querySelector(".pf-tgt") ? tr.querySelector(".pf-tgt").value : "";
+      var tgt = tgtRaw === "" ? null : Number(tgtRaw);
       if (/^[A-Z0-9.^=-]{1,12}$/.test(sym) && isFinite(amt) && amt > 0) {
-        rows.push({ symbol: sym, amount: amt });
+        rows.push({ symbol: sym, amount: amt, target: isFinite(tgt) && tgt >= 0 ? tgt : null });
       }
     });
     return rows;
@@ -159,6 +162,7 @@
       years: Number(document.getElementById("pf-years").value) || 30,
       dca: Number(document.getElementById("pf-dca").value) || 0,
       drip: document.getElementById("pf-drip").checked,
+      rebal: document.getElementById("pf-rebal").checked,
       inflAdj: document.getElementById("pf-infl-adj").checked,
       infl: Number(document.getElementById("pf-infl").value),
       g: {
@@ -171,10 +175,11 @@
 
   function applyState(saved) {
     while (rowsBody.firstChild) rowsBody.removeChild(rowsBody.firstChild);
-    (saved.rows || []).forEach(function (r) { addRow(r.symbol, r.amount); });
+    (saved.rows || []).forEach(function (r) { addRow(r.symbol, r.amount, r.target); });
     if (!rowsBody.firstChild) addRow("", "");
     if (saved.years) document.getElementById("pf-years").value = saved.years;
     if (isFinite(saved.dca)) document.getElementById("pf-dca").value = saved.dca;
+    if (typeof saved.rebal === "boolean") document.getElementById("pf-rebal").checked = saved.rebal;
     if (typeof saved.inflAdj === "boolean") document.getElementById("pf-infl-adj").checked = saved.inflAdj;
     if (isFinite(saved.infl)) document.getElementById("pf-infl").value = saved.infl;
     if (typeof saved.drip === "boolean") document.getElementById("pf-drip").checked = saved.drip;
@@ -370,23 +375,63 @@
       '<div class="pf-alloc-legend">' + legend + "</div></div>";
   }
 
-  // Allocation drift under DRIP: with a shared growth assumption, weights shift
-  // only because yields differ (and DCA buys at the initial weights) — so the
-  // drift is scenario-independent.
-  function allocationDrift(ok, invested, years, dca, gPct, milestones) {
+  // Per-ticker monthly engine. Without rebalancing it matches project():
+  // DRIP folds each ticker's dividends back into itself and DCA buys at the
+  // initial weights. With rebalancing, each month's new cash (DCA + pooled
+  // dividends when DRIP) is directed to the tickers furthest below their
+  // target weight — cash-flow rebalancing only, nothing is ever sold.
+  // targets: array of fractions summing to 1 (only used when rebal).
+  function simulate(ok, targets, gPct, years, drip, dcaMonthly, rebal, milestones) {
     var gm = Math.pow(1 + gPct / 100, 1 / 12) - 1;
     var vals = ok.map(function (t) { return t.amount; });
+    var invested = vals.reduce(function (s, x) { return s + x; }, 0);
     var w0 = ok.map(function (t) { return t.amount / invested; });
+    var out = [{ year: 0, value: invested, divYear: 0, divCum: 0, contributed: invested }];
     var snaps = { 0: vals.slice() };
+    var cum = 0, contributed = invested;
+    var i;
     for (var y = 1; y <= years; y++) {
+      var divYear = 0;
       for (var m = 0; m < 12; m++) {
-        for (var i = 0; i < ok.length; i++) {
-          vals[i] = vals[i] * (1 + ok[i].yield / 12) * (1 + gm) + dca * w0[i];
+        var divs = ok.map(function (t, k) { return vals[k] * t.yield / 12; });
+        var sumDivs = divs.reduce(function (s, x) { return s + x; }, 0);
+        divYear += sumDivs;
+        if (!drip) cum += sumDivs;
+        if (rebal) {
+          // Grow first, then distribute the month's cash toward targets.
+          // DRIP dividends earn the month's growth (as in project()).
+          for (i = 0; i < vals.length; i++) vals[i] *= (1 + gm);
+          var pool = dcaMonthly + (drip ? sumDivs * (1 + gm) : 0);
+          if (pool > 0) {
+            var V = vals.reduce(function (s, x) { return s + x; }, 0) + pool;
+            var defs = vals.map(function (v, k) { return Math.max(0, targets[k] * V - v); });
+            var sumDef = defs.reduce(function (s, x) { return s + x; }, 0);
+            if (sumDef <= pool) {
+              // Enough cash to fully close the gaps; surplus buys at target weights.
+              var extra = pool - sumDef;
+              for (i = 0; i < vals.length; i++) vals[i] += defs[i] + extra * targets[i];
+            } else {
+              // Not enough: split pro-rata by how far below target each ticker is.
+              for (i = 0; i < vals.length; i++) vals[i] += (pool * defs[i]) / sumDef;
+            }
+          }
+        } else {
+          for (i = 0; i < vals.length; i++) {
+            vals[i] = (vals[i] + (drip ? divs[i] : 0)) * (1 + gm) + dcaMonthly * w0[i];
+          }
         }
+        contributed += dcaMonthly;
       }
-      if (milestones.indexOf(y) >= 0) snaps[y] = vals.slice();
+      out.push({
+        year: y,
+        value: vals.reduce(function (s, x) { return s + x; }, 0),
+        divYear: divYear,
+        divCum: cum,
+        contributed: contributed,
+      });
+      if (milestones && milestones.indexOf(y) >= 0) snaps[y] = vals.slice();
     }
-    return snaps;
+    return { rows: out, snaps: snaps };
   }
 
   var fmtDate = function (unix) {
@@ -443,6 +488,7 @@
     var years = Math.min(50, Math.max(5, Number(document.getElementById("pf-years").value) || 30));
     var dca = Math.max(0, Number(document.getElementById("pf-dca").value) || 0);
     var drip = document.getElementById("pf-drip").checked;
+    var rebal = document.getElementById("pf-rebal").checked;
     var inflAdj = document.getElementById("pf-infl-adj").checked;
     var infl = Math.max(0, Number(document.getElementById("pf-infl").value) || 0);
     // Real (inflation-adjusted) growth: (1+g)/(1+π) − 1. DCA stays constant
@@ -460,7 +506,7 @@
 
     Promise.all(rows.map(function (r) {
       return fetchTicker(r.symbol).then(
-        function (d) { d.amount = r.amount; return d; },
+        function (d) { d.amount = r.amount; d.target = r.target; return d; },
         function () { return { symbol: r.symbol, error: true, amount: r.amount }; }
       );
     })).then(function (tickers) {
@@ -481,6 +527,38 @@
       });
       var portYield = divTotal / invested;
 
+      // Resolve target weights for rebalancing: filled boxes are % of the
+      // portfolio; blank boxes share whatever remains equally (10, 50, blank
+      // → 40). All filled but ≠100% → normalized proportionally.
+      var targets = null, targetNote = "";
+      if (rebal && ok.length > 1) {
+        var sumFilled = 0, blanks = 0;
+        ok.forEach(function (t) {
+          if (t.target !== null && t.target !== undefined) sumFilled += t.target;
+          else blanks++;
+        });
+        if (sumFilled > 100.0001) {
+          result.innerHTML = '<div class="lookup-card lookup-error"><p>Tổng “Mục tiêu %” đang là ' +
+            sumFilled.toFixed(1) + "% — vượt quá 100%. Hãy giảm bớt hoặc để trống một số ô (ô trống sẽ tự chia phần còn lại).</p></div>";
+          return;
+        }
+        var share = blanks ? Math.max(0, 100 - sumFilled) / blanks : 0;
+        var resolved = ok.map(function (t) {
+          return t.target !== null && t.target !== undefined ? t.target : share;
+        });
+        var sumAll = resolved.reduce(function (s, x) { return s + x; }, 0);
+        if (sumAll <= 0) {
+          // degenerate (all zeros) — fall back to current weights
+          resolved = ok.map(function (t) { return (t.amount / invested) * 100; });
+          sumAll = 100;
+        } else if (Math.abs(sumAll - 100) > 0.01) {
+          targetNote = " (tổng " + sumAll.toFixed(1) + "% được quy đổi về 100%)";
+        }
+        targets = resolved.map(function (x) { return x / sumAll; });
+      } else if (rebal) {
+        rebal = false; // one ticker: nothing to rebalance
+      }
+
       var gain = cssVar("--gain") || "#1a7f4b";
       var loss = cssVar("--loss") || "#c0392b";
       var scenarios = [
@@ -489,27 +567,40 @@
         { key: "strong", label: "Mạnh (" + gStrong + "%/năm)", color: gain, g: gStrong },
       ];
       scenarios.forEach(function (sc) {
-        sc.data = project(invested, portYield, adjG(sc.g), years, drip, dca);
+        if (rebal) {
+          sc.data = simulate(ok, targets, adjG(sc.g), years, drip, dca, true, null).rows;
+        } else {
+          sc.data = project(invested, portYield, adjG(sc.g), years, drip, dca);
+        }
       });
 
-      // Allocation drift table (DRIP only, >1 ticker)
+      // Weights-over-time table (DRIP drift, or convergence toward targets)
       var driftHtml = "";
-      if (drip && ok.length > 1) {
+      if (ok.length > 1 && (drip || rebal)) {
         var driftMs = [10, 20, years].filter(function (y, i2, arr) { return y <= years && arr.indexOf(y) === i2; });
-        var snaps = allocationDrift(ok, invested, years, dca, gAvg, driftMs);
+        var snaps = simulate(ok, targets, gAvg, years, drip, dca, rebal, driftMs).snaps;
         var totalAt = function (arr) { return arr.reduce(function (s, x) { return s + x; }, 0); };
         var driftRows = ok.map(function (t, i2) {
-          return "<tr><th>" + esc(t.symbol) + "</th><td>" + ((t.amount / invested) * 100).toFixed(1) + "%</td>" +
+          return "<tr><th>" + esc(t.symbol) + "</th>" +
+            (rebal ? "<td><strong>" + (targets[i2] * 100).toFixed(1) + "%</strong></td>" : "") +
+            "<td>" + ((t.amount / invested) * 100).toFixed(1) + "%</td>" +
             driftMs.map(function (y) {
               var arr = snaps[y];
               return "<td>" + ((arr[i2] / totalAt(arr)) * 100).toFixed(1) + "%</td>";
             }).join("") + "</tr>";
         }).join("");
-        driftHtml = "<h2>Tỷ trọng thay đổi theo thời gian (khi DRIP)</h2>" +
-          '<table class="lookup-table tf-table"><thead><tr><th>Mã</th><th>Hiện tại</th>' +
+        driftHtml = "<h2>" + (rebal ? "Tỷ trọng tiến về mục tiêu (tái cân bằng khi nạp tiền)" : "Tỷ trọng thay đổi theo thời gian (khi DRIP)") + "</h2>" +
+          '<table class="lookup-table tf-table"><thead><tr><th>Mã</th>' +
+          (rebal ? "<th>Mục tiêu</th>" : "") + "<th>Hiện tại</th>" +
           driftMs.map(function (y) { return "<th>Năm " + y + "</th>"; }).join("") +
           "</tr></thead><tbody>" + driftRows + "</tbody></table>" +
-          '<p class="pf-sub">Khi tái đầu tư cổ tức, mã có tỷ suất cổ tức cao hơn tự mua thêm nhiều cổ phiếu hơn nên tỷ trọng tăng dần; DCA được giả định mua theo tỷ trọng ban đầu. Sự dịch chuyển này gần như không phụ thuộc kịch bản tăng trưởng vì các mã dùng chung giả định tăng giá.</p>';
+          (rebal
+            ? '<p class="pf-sub">Tái cân bằng chỉ bằng dòng tiền nạp vào (DCA' + (drip ? " + cổ tức tái đầu tư" : "") +
+              "): mỗi tháng, tiền mới được ưu tiên mua các mã đang dưới tỷ trọng mục tiêu — không bán mã nào. Tốc độ tiến về mục tiêu phụ thuộc quy mô dòng tiền so với danh mục; danh mục càng lớn so với khoản nạp thì hội tụ càng chậm.</p>" +
+              (dca <= 0 && !drip
+                ? '<p class="pf-sub loss">Lưu ý: DCA = $0 và không DRIP nên không có dòng tiền nào để tái cân bằng — tỷ trọng sẽ không đổi.</p>'
+                : "")
+            : '<p class="pf-sub">Khi tái đầu tư cổ tức, mã có tỷ suất cổ tức cao hơn tự mua thêm nhiều cổ phiếu hơn nên tỷ trọng tăng dần; DCA được giả định mua theo tỷ trọng ban đầu. Sự dịch chuyển này gần như không phụ thuộc kịch bản tăng trưởng vì các mã dùng chung giả định tăng giá.</p>');
       }
 
       // Per-ticker breakdown
@@ -546,6 +637,11 @@
         "<p>Đầu tư ban đầu <strong>" + fmtMoney(invested) + "</strong>" +
         (dca > 0 ? " + DCA <strong>" + fmtMoney(dca) + "/tháng</strong> (tổng vốn góp sau " + years + " năm: " +
           fmtMoney(invested + dca * 12 * years) + ")" : "") +
+        (rebal
+          ? " · tái cân bằng khi nạp tiền về mục tiêu <strong>" + ok.map(function (t, i2) {
+              return esc(t.symbol) + " " + (targets[i2] * 100).toFixed(1).replace(/\.0$/, "") + "%";
+            }).join(" · ") + "</strong>" + targetNote
+          : "") +
         " · tỷ suất cổ tức danh mục <strong>" +
         (portYield * 100).toFixed(2) + "%/năm</strong> → ngay năm đầu nhận khoảng <strong>" + fmtMoney(divTotal) +
         "/năm</strong> (~" + fmtMoney(divTotal / 12) + "/tháng)" +

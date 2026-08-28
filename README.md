@@ -25,7 +25,9 @@ Không backend, không database, không API key trong repo.
   từng mã, rồi chiếu giá trị 5–50 năm (mặc định 30) theo **3 kịch bản kinh tế**
   yếu/trung bình/mạnh (tỷ lệ tăng trưởng chỉnh được).
 - Hiển thị cổ tức nhận được **mỗi tháng và mỗi năm** tại các mốc 1/5/10/20/30 năm,
-  tùy chọn **tái đầu tư cổ tức (DRIP)**; danh mục lưu trong trình duyệt.
+  tùy chọn **tái đầu tư cổ tức (DRIP)** và **đóng góp định kỳ hằng tháng (DCA)** —
+  lãi kép tính theo tháng, biểu đồ vẽ thêm đường "vốn đã góp" để so với phần lãi;
+  danh mục lưu trong trình duyệt.
 
 ### 📰 Báo cáo tự động (`/reports/` + Blog)
 GitHub Actions chạy theo lịch, fetch dữ liệu, **viết báo cáo tiếng Việt bằng máy phân tích

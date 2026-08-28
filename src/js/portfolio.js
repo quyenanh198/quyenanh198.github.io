@@ -98,19 +98,24 @@
   }
 
   // ---- Projection math ----
-  // Yearly compounding; dividends assumed to grow with portfolio value
-  // (constant yield on value). DRIP folds each year's dividends back in.
-  function project(invested, yieldRate, growthPct, years, drip) {
-    var g = growthPct / 100;
-    var out = [{ year: 0, value: invested, divYear: 0, divCum: 0 }];
-    var v = invested, cum = 0;
+  // Monthly compounding so DCA contributions land each month; dividends
+  // assumed to grow with portfolio value (constant yield on value). DRIP
+  // folds each month's dividends back in.
+  function project(invested, yieldRate, growthPct, years, drip, dcaMonthly) {
+    var gm = Math.pow(1 + growthPct / 100, 1 / 12) - 1;
+    var ym = yieldRate / 12;
+    var out = [{ year: 0, value: invested, divYear: 0, divCum: 0, contributed: invested }];
+    var v = invested, cum = 0, contributed = invested;
     for (var y = 1; y <= years; y++) {
-      var divs = v * yieldRate;
-      var next = v * (1 + g);
-      if (drip) next += divs;
-      else cum += divs;
-      v = next;
-      out.push({ year: y, value: v, divYear: divs, divCum: cum });
+      var divYear = 0;
+      for (var m = 0; m < 12; m++) {
+        var divs = v * ym;
+        divYear += divs;
+        if (drip) v += divs; else cum += divs;
+        v = v * (1 + gm) + dcaMonthly;
+        contributed += dcaMonthly;
+      }
+      out.push({ year: y, value: v, divYear: divYear, divCum: cum, contributed: contributed });
     }
     return out;
   }
@@ -147,6 +152,7 @@
       localStorage.setItem("pfPortfolio", JSON.stringify({
         rows: readPortfolio(),
         years: Number(document.getElementById("pf-years").value) || 30,
+        dca: Number(document.getElementById("pf-dca").value) || 0,
         drip: document.getElementById("pf-drip").checked,
         g: {
           weak: Number(document.getElementById("g-weak").value),
@@ -163,6 +169,7 @@
     if (saved && saved.rows && saved.rows.length) {
       saved.rows.forEach(function (r) { addRow(r.symbol, r.amount); });
       if (saved.years) document.getElementById("pf-years").value = saved.years;
+      if (isFinite(saved.dca)) document.getElementById("pf-dca").value = saved.dca;
       if (typeof saved.drip === "boolean") document.getElementById("pf-drip").checked = saved.drip;
       if (saved.g) {
         if (isFinite(saved.g.weak)) document.getElementById("g-weak").value = saved.g.weak;
@@ -179,7 +186,7 @@
   // ---- Chart ----
 
   var chart = null;
-  function drawChart(el, scenarios, years) {
+  function drawChart(el, scenarios, contrib) {
     if (!window.LightweightCharts) {
       el.innerHTML = '<p class="lookup-name">Không tải được thư viện biểu đồ.</p>';
       return;
@@ -212,6 +219,14 @@
         return { time: (startYear + p.year) + "-01-01", value: Math.round(p.value) };
       }));
     });
+    if (contrib) {
+      chart.addLineSeries({
+        color: text, lineWidth: 1, lineStyle: 2, title: "Vốn đã góp",
+        priceLineVisible: false, lastValueVisible: false,
+      }).setData(contrib.map(function (p) {
+        return { time: (startYear + p.year) + "-01-01", value: Math.round(p.contributed) };
+      }));
+    }
     chart.timeScale().fitContent();
   }
 
@@ -226,6 +241,7 @@
     }
     savePortfolio();
     var years = Math.min(50, Math.max(5, Number(document.getElementById("pf-years").value) || 30));
+    var dca = Math.max(0, Number(document.getElementById("pf-dca").value) || 0);
     var drip = document.getElementById("pf-drip").checked;
     var gWeak = Number(document.getElementById("g-weak").value);
     var gAvg = Number(document.getElementById("g-avg").value);
@@ -266,7 +282,7 @@
         { key: "strong", label: "Mạnh (" + gStrong + "%/năm)", color: gain, g: gStrong },
       ];
       scenarios.forEach(function (sc) {
-        sc.data = project(invested, portYield, sc.g, years, drip);
+        sc.data = project(invested, portYield, sc.g, years, drip, dca);
       });
 
       // Per-ticker breakdown
@@ -289,7 +305,8 @@
             var p = sc.data[y];
             return "<td>" + fmtMoney(p.value) +
               '<br><span class="pf-sub">Cổ tức: ' + fmtMoney(p.divYear) + "/năm · " + fmtMoney(p.divYear / 12) + "/tháng</span>" +
-              (!drip && p.divCum > 0 ? '<br><span class="pf-sub">Đã nhận lũy kế: ' + fmtMoney(p.divCum) + "</span>" : "") +
+              (dca > 0 ? '<br><span class="pf-sub">Vốn đã góp: ' + fmtMoney(p.contributed) + " · Lãi: " + fmtMoney(p.value - p.contributed + (drip ? 0 : p.divCum)) + "</span>" : "") +
+              (!drip && p.divCum > 0 ? '<br><span class="pf-sub">Cổ tức đã nhận lũy kế: ' + fmtMoney(p.divCum) + "</span>" : "") +
               "</td>";
           }).join("") + "</tr>";
       }).join("");
@@ -299,23 +316,29 @@
         "<h2>Danh mục hiện tại</h2>" +
         '<table class="lookup-table tf-table"><thead><tr><th>Mã</th><th>Tên</th><th>Giá</th><th>Số CP</th><th>Yield TTM</th><th>Cổ tức/năm</th><th>Cổ tức/tháng</th></tr></thead><tbody>' +
         tickerRows + "</tbody></table>" +
-        "<p>Tổng đầu tư <strong>" + fmtMoney(invested) + "</strong> · tỷ suất cổ tức danh mục <strong>" +
+        "<p>Đầu tư ban đầu <strong>" + fmtMoney(invested) + "</strong>" +
+        (dca > 0 ? " + DCA <strong>" + fmtMoney(dca) + "/tháng</strong> (tổng vốn góp sau " + years + " năm: " +
+          fmtMoney(invested + dca * 12 * years) + ")" : "") +
+        " · tỷ suất cổ tức danh mục <strong>" +
         (portYield * 100).toFixed(2) + "%/năm</strong> → ngay năm đầu nhận khoảng <strong>" + fmtMoney(divTotal) +
         "/năm</strong> (~" + fmtMoney(divTotal / 12) + "/tháng)" +
-        (failed.length ? '<br><span class="loss">Bỏ qua vì lỗi dữ liệu: ' + failed.map(function (t) { return esc(t.symbol); }).join(", ") + "</span>" : "") +
+        (failed.length
+          ? '<br><span class="loss">Bỏ qua vì lỗi dữ liệu: ' + failed.map(function (t) { return esc(t.symbol); }).join(", ") + "</span>" +
+            '<br><span class="pf-sub">Kiểm tra lại mã (đúng như trên Yahoo Finance). Cổ phiếu ngoài thị trường Mỹ cần hậu tố sàn — ví dụ INTP.JK (Indonesia), 7203.T (Nhật), 0700.HK (Hồng Kông). Nếu bạn định nhập Intel, mã đúng là INTC.</span>'
+          : "") +
         "</p>" +
         "<h2>Giá trị danh mục " + years + " năm tới " + (drip ? "(tái đầu tư cổ tức)" : "(nhận cổ tức bằng tiền)") + "</h2>" +
         '<div id="pf-chart" class="lookup-chart"></div>' +
         '<p class="chart-legend">' + scenarios.map(function (sc) {
           return '<span style="color:' + sc.color + '">— ' + sc.label + "</span> ";
-        }).join("") + "</p>" +
+        }).join("") + (dca > 0 ? '<span class="pf-sub">- - Vốn đã góp</span>' : "") + "</p>" +
         "<h2>Các mốc quan trọng</h2>" +
         '<table class="lookup-table tf-table"><thead>' + msHead + "</thead><tbody>" + msRows + "</tbody></table>" +
         (drip
           ? "<p>Với DRIP, cổ tức mỗi năm được mua thêm cổ phiếu nên tổng tăng trưởng ≈ tăng giá + tỷ suất cổ tức, lãi kép theo cả hai kênh.</p>"
           : "<p>Không tái đầu tư: giá trị danh mục chỉ tăng theo giá; dòng cổ tức nhận bằng tiền được cộng dồn ở mục “Đã nhận lũy kế”.</p>") +
         "</div>";
-      drawChart(document.getElementById("pf-chart"), scenarios, years);
+      drawChart(document.getElementById("pf-chart"), scenarios, dca > 0 ? scenarios[0].data : null);
     });
   }
 

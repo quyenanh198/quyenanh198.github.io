@@ -629,6 +629,78 @@ button.lookup-chip:hover {
 
 .lookup-error p { margin: 0; }
 
+.pf-table {
+  border-collapse: collapse;
+  margin: 0 0 8px;
+}
+
+.pf-table th {
+  text-align: left;
+  color: var(--fg-muted);
+  font-weight: normal;
+  font-size: 0.85em;
+  padding: 4px 10px 4px 0;
+}
+
+.pf-table td {
+  padding: 4px 10px 4px 0;
+}
+
+.pf-table input {
+  font: inherit;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+}
+
+.pf-table input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.pf-sym {
+  width: 120px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+}
+
+.pf-amt { width: 160px; }
+
+.pf-options {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 12px 0;
+  font-size: 0.9em;
+}
+
+.pf-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-muted);
+}
+
+.pf-options input[type="number"] {
+  width: 76px;
+  font: inherit;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+
+.pf-check input { accent-color: var(--accent); }
+
+.pf-sub {
+  color: var(--fg-muted);
+  font-size: 0.82em;
+}
+
 .social-links {
   list-style: none;
   padding: 0;

@@ -20,6 +20,13 @@ Không backend, không database, không API key trong repo.
   động lượng & dòng tiền, thống kê rủi ro, cổ tức/chia tách/earnings, đánh giá điểm vào,
   kế hoạch giao dịch và kịch bản.
 
+### 💰 Mô phỏng danh mục (`/portfolio/`)
+- Nhập danh mục (mã + số tiền), hệ thống lấy giá và **lịch sử cổ tức 12 tháng thật** của
+  từng mã, rồi chiếu giá trị 5–50 năm (mặc định 30) theo **3 kịch bản kinh tế**
+  yếu/trung bình/mạnh (tỷ lệ tăng trưởng chỉnh được).
+- Hiển thị cổ tức nhận được **mỗi tháng và mỗi năm** tại các mốc 1/5/10/20/30 năm,
+  tùy chọn **tái đầu tư cổ tức (DRIP)**; danh mục lưu trong trình duyệt.
+
 ### 📰 Báo cáo tự động (`/reports/` + Blog)
 GitHub Actions chạy theo lịch, fetch dữ liệu, **viết báo cáo tiếng Việt bằng máy phân tích
 theo luật** (không bịa số — mọi con số từ dữ liệu thật), commit và deploy:

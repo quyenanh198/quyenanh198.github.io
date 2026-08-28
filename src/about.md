@@ -15,6 +15,9 @@ phân tích trên trang được tạo tự động theo lịch, không cần ca
   kiểu TradingView (khung 5 phút → 10 năm) với bộ chỉ báo tùy chỉnh (SMA, EMA, Bollinger,
   Ichimoku, RSI, Stochastic, MACD, hỗ trợ/kháng cự, gợi ý Entry/SL), kèm bài phân tích
   đa khung thời gian viết tự động ngay dưới biểu đồ.
+- **[Portfolio](/portfolio/)** — nhập danh mục của bạn để mô phỏng giá trị 30 năm tới
+  theo 3 kịch bản kinh tế, kèm cổ tức thực nhận mỗi tháng/năm và tùy chọn tái đầu tư
+  cổ tức.
 - **[Reports](/reports/)** — báo cáo định kỳ: tổng hợp thị trường tuần/tháng, dòng tiền
   luân chuyển giữa 11 nhóm ngành S&P 500, và theo dõi danh mục ticker.
 - **[Blog](/blog/)** — mỗi cuối tuần và đầu tháng, hệ thống tự viết một bài phân tích

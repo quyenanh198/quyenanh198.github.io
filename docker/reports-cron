@@ -1,0 +1,7 @@
+# Same cadence as the GitHub Actions pipeline: weekly on Saturday morning,
+# monthly on the 1st. Each run regenerates markdown into the reports volume
+# (src/reports is symlinked to /site/reports) then rebuilds the static site.
+# Output goes to the container log via pid 1's stdout.
+PATH=/usr/local/bin:/usr/bin:/bin
+30 7 * * 6 root cd /site && npm run reports:weekly >> /proc/1/fd/1 2>&1 && npx @11ty/eleventy >> /proc/1/fd/1 2>&1
+0 8 1 * * root cd /site && npm run reports:monthly >> /proc/1/fd/1 2>&1 && npx @11ty/eleventy >> /proc/1/fd/1 2>&1
